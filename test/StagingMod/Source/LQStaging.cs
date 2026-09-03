@@ -6,18 +6,29 @@ using System.Text;
 using CombatExtended;
 using LoadoutQuality;
 using RimWorld;
+using UnityEngine;
 using Verse;
 using Verse.AI;
 
 namespace LQTestStaging
 {
     /// <summary>
-    /// Stages QUAL saves (-quicktest -lqstage):
-    ///  QUAL-1-filter: colonist "Filty", empty-handed, loadout with one rifle slot;
-    ///    AWFUL rifle near, EXCELLENT rifle farther (both plain steel-less defs).
-    ///  QUAL-2-upgrade: colonist "Uppy" with NORMAL rifle equipped + steel gladius
-    ///    sidearm, loadout declaring both; EXCELLENT rifle and EXCELLENT PLASTEEL
-    ///    gladius on the ground (the plasteel one must NOT tempt the same-stuff rule).
+    /// Stages LQ saves (-quicktest -lqstage), CE-only profile (no Simple Sidearms):
+    ///  LQ-1-ranged: "Ranged" holds a NORMAL bolt-action rifle, loadout {rifle};
+    ///    an EXCELLENT rifle on the ground. Ranged upgrade path + off-control + the
+    ///    dropped-unforbidden contract.
+    ///  LQ-2-melee: "Melee" holds a STEEL NORMAL gladius, loadout {gladius}; a
+    ///    PLASTEEL EXCELLENT gladius on the ground — a DIFFERENT material, which the
+    ///    old same-stuff rule would have ignored. Melee ranks by MeleeWeapon_AverageDPS
+    ///    (folds material), so the plasteel copy must win.
+    ///  LQ-3-bucket: "Bucket" holds an EXCELLENT rifle damaged to a low HP bucket;
+    ///    an EXCELLENT rifle at the SAME bucket (must NOT tempt a swap), then a
+    ///    full-HP EXCELLENT rifle (higher bucket, must win). Pins the tiebreak both
+    ///    ways.
+    ///  LQ-4-floor: "Floor" holds an AWFUL rifle with the floor raised to Good; a
+    ///    POOR rifle on the ground (better than Awful, below the floor — must be
+    ///    refused), then an EXCELLENT rifle (above the floor, must win). Pins the
+    ///    acquisition floor both ways.
     /// </summary>
     public class LQStagingComponent : GameComponent
     {
@@ -60,8 +71,8 @@ namespace LQTestStaging
             Log.Message($"[LQStaging] anchor {anchor}.");
             // Home area over the whole scene: without it, vanilla auto-forbids
             // anything pawns drop (outside-home-area convention), which would
-            // false-fail the dropped-unforbidden contract that only exists to
-            // hold inside a colony's home area.
+            // false-fail the dropped-unforbidden contract that only holds inside a
+            // colony's home area.
             foreach (IntVec3 c in GenRadial.RadialCellsAround(anchor, 25f, useCenter: true))
             {
                 if (c.InBounds(map))
@@ -71,56 +82,98 @@ namespace LQTestStaging
             }
 
             Stage1(map);
-            SaveAndReset("QUAL-1-filter");
+            SaveAndReset("LQ-1-ranged");
             Stage2(map);
-            SaveAndReset("QUAL-2-upgrade");
+            SaveAndReset("LQ-2-melee");
+            Stage3(map);
+            SaveAndReset("LQ-3-bucket");
+            Stage4(map);
+            SaveAndReset("LQ-4-floor");
 
             Find.TickManager.Pause();
-            Log.Message("[LQStaging] All QUAL saves created.");
-            Find.LetterStack.ReceiveLetter("QUAL saves created",
-                "QUAL-1-filter, QUAL-2-upgrade written.", LetterDefOf.PositiveEvent);
+            Log.Message("[LQStaging] All LQ saves created.");
+            Find.LetterStack.ReceiveLetter("LQ saves created",
+                "LQ-1-ranged, LQ-2-melee, LQ-3-bucket, LQ-4-floor written.", LetterDefOf.PositiveEvent);
         }
 
         private void Stage1(Map map)
         {
-            Pawn pawn = SpawnColonist(map, "Filty", new IntVec3(-4, 0, 0));
+            Pawn pawn = SpawnColonist(map, "Ranged", new IntVec3(-6, 0, 0));
             ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
-            SpawnWithQuality(map, rifle, null, QualityCategory.Awful, anchor + new IntVec3(3, 0, 2));
-            SpawnWithQuality(map, rifle, null, QualityCategory.Excellent, anchor + new IntVec3(10, 0, 6));
+
+            ThingWithComps carried = MakeWithQuality(rifle, null, QualityCategory.Normal);
+            pawn.equipment.AddEquipment(carried);
+            LoadMag(pawn, carried);
+            SpawnWithQuality(map, rifle, null, QualityCategory.Excellent, anchor + new IntVec3(8, 0, 4));
             SpawnAmmoFor(map, rifle);
 
-            var loadout = new Loadout("QUAL filter test");
-            loadout.AddSlot(new LoadoutSlot(rifle, 1));
-            LoadoutManager.AddLoadout(loadout);
-            stagedLoadouts.Add(loadout);
-            pawn.SetLoadout(loadout);
+            GiveLoadout(pawn, "LQ ranged test", rifle);
         }
 
         private void Stage2(Map map)
         {
-            Pawn pawn = SpawnColonist(map, "Uppy", new IntVec3(4, 0, 0));
-            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
+            Pawn pawn = SpawnColonist(map, "Melee", new IntVec3(-2, 0, 0));
             ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
 
-            ThingWithComps carriedRifle = MakeWithQuality(rifle, null, QualityCategory.Normal);
-            pawn.equipment.AddEquipment(carriedRifle);
-            LoadMag(pawn, carriedRifle);
-            ThingWithComps carriedGladius = MakeWithQuality(gladius, ThingDefOf.Steel, QualityCategory.Normal);
-            pawn.inventory.innerContainer.TryAdd(carriedGladius, true);
-
-            SpawnWithQuality(map, rifle, null, QualityCategory.Excellent, anchor + new IntVec3(8, 0, 4));
+            ThingWithComps carried = MakeWithQuality(gladius, ThingDefOf.Steel, QualityCategory.Normal);
+            pawn.equipment.AddEquipment(carried);
             SpawnWithQuality(map, gladius, ThingDefOf.Plasteel, QualityCategory.Excellent, anchor + new IntVec3(8, 0, -4));
+
+            GiveLoadout(pawn, "LQ melee test", gladius);
+        }
+
+        private void Stage3(Map map)
+        {
+            Pawn pawn = SpawnColonist(map, "Bucket", new IntVec3(2, 0, 0));
+            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
+
+            // Carried Excellent rifle damaged to ~half HP (a low bucket). The
+            // same-bucket bait sits at the same fraction; the full-HP winner is
+            // staged in phase 1 by the runner (kept off the map until then).
+            ThingWithComps carried = MakeWithQuality(rifle, null, QualityCategory.Excellent);
+            carried.HitPoints = Mathf.Max(1, carried.MaxHitPoints / 2);
+            pawn.equipment.AddEquipment(carried);
+            LoadMag(pawn, carried);
+
+            ThingWithComps sameBucket = MakeWithQuality(rifle, null, QualityCategory.Excellent);
+            sameBucket.HitPoints = carried.HitPoints; // identical bucket — must not tempt a swap
+            GenSpawn.Spawn(sameBucket, FindCell(map, anchor + new IntVec3(6, 0, 3)), map);
+            staged.Add(sameBucket);
             SpawnAmmoFor(map, rifle);
 
-            var loadout = new Loadout("QUAL upgrade test");
-            loadout.AddSlot(new LoadoutSlot(rifle, 1));
-            loadout.AddSlot(new LoadoutSlot(gladius, 1));
+            GiveLoadout(pawn, "LQ bucket test", rifle);
+        }
+
+        private void Stage4(Map map)
+        {
+            Pawn pawn = SpawnColonist(map, "Floor", new IntVec3(6, 0, 0));
+            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
+
+            ThingWithComps carried = MakeWithQuality(rifle, null, QualityCategory.Awful);
+            pawn.equipment.AddEquipment(carried);
+            LoadMag(pawn, carried);
+            // Poor is better than the carried Awful but below the Good floor the
+            // runner sets — must be refused. The Excellent winner is staged in
+            // phase 1.
+            SpawnWithQuality(map, rifle, null, QualityCategory.Poor, anchor + new IntVec3(6, 0, -3));
+            SpawnAmmoFor(map, rifle);
+
+            GiveLoadout(pawn, "LQ floor test", rifle);
+        }
+
+        // ---- helpers -------------------------------------------------------
+
+        private void GiveLoadout(Pawn pawn, string name, params ThingDef[] weapons)
+        {
+            var loadout = new Loadout(name);
+            foreach (ThingDef w in weapons)
+            {
+                loadout.AddSlot(new LoadoutSlot(w, 1));
+            }
             LoadoutManager.AddLoadout(loadout);
             stagedLoadouts.Add(loadout);
             pawn.SetLoadout(loadout);
         }
-
-        // ---- helpers -------------------------------------------------------
 
         private ThingWithComps MakeWithQuality(ThingDef def, ThingDef stuff, QualityCategory quality)
         {
@@ -208,7 +261,7 @@ namespace LQTestStaging
                           PawnGenerationContext.NonPlayer, forceGenerateNewPawn: true,
                           canGeneratePawnRelations: false, colonistRelationChanceFactor: 0f);
             Pawn pawn = PawnGenerator.GeneratePawn(request);
-            pawn.Name = new NameTriple("Test", nick, "QUAL");
+            pawn.Name = new NameTriple("Test", nick, "LQ");
             pawn.equipment?.DestroyAllEquipment();
             pawn.inventory?.DestroyAll();
             GenSpawn.Spawn(pawn, FindCell(map, anchor + offset), map);
@@ -224,14 +277,14 @@ namespace LQTestStaging
         {
             Log.Message("[LQStaging] assembly loaded.");
             if (!GenCommandLine.TryGetCommandLineArg("ceassert", out string scenario)
-                || scenario.NullOrEmpty() || !scenario.StartsWith("qual"))
+                || scenario.NullOrEmpty() || !scenario.StartsWith("lq"))
             {
                 return;
             }
             // Kill the default-ON upgrade BEFORE any save can load and tick — the
-            // LoadedGame-callback reset loses a race against the think tree on a
-            // save that loads unpaused (each scenario re-enables explicitly).
-            LoadoutQuality.LoadoutQualityMod.Settings.autoUpgrade = false;
+            // LoadedGame-callback reset loses a race against the think tree on a save
+            // that loads unpaused (each scenario re-enables explicitly).
+            LoadoutQualityMod.Settings.autoUpgrade = false;
             if (GenCommandLine.TryGetCommandLineArg("celoadsave", out string save) && !save.NullOrEmpty())
             {
                 LongEventHandler.ExecuteWhenFinished(() =>
@@ -254,6 +307,10 @@ namespace LQTestStaging
         private readonly List<string> results = new List<string>();
         private bool failed;
 
+        // bucket-scenario bookkeeping
+        private int carriedBucketId;
+        private int carriedBucketValue;
+
         public LQTestRunnerComponent(Game game)
         {
         }
@@ -261,27 +318,41 @@ namespace LQTestStaging
         public override void LoadedGame()
         {
             if (!GenCommandLine.TryGetCommandLineArg("ceassert", out scenario)
-                || scenario.NullOrEmpty() || !scenario.StartsWith("qual"))
+                || scenario.NullOrEmpty() || !scenario.StartsWith("lq"))
             {
                 return;
             }
             LongEventHandler.ExecuteWhenFinished(() =>
             {
-                string nick = scenario == "qual1" ? "Filty" : "Uppy";
-                subject = Find.CurrentMap.mapPawns.FreeColonistsSpawned
+                string nick = NickFor(scenario);
+                subject = Find.CurrentMap?.mapPawns.FreeColonistsSpawned
                     .FirstOrDefault(p => p.Name is NameTriple nt && nt.Nick == nick);
                 if (subject == null)
                 {
-                    Check("setup", false, "subject pawn missing");
+                    Check("setup", false, $"subject pawn '{nick}' missing");
                     Finish();
                     return;
                 }
                 LoadoutQualityMod.Settings.autoUpgrade = false; // each scenario opts in explicitly
+                LoadoutQualityMod.Settings.minQuality = QualityCategory.Poor;
+                LoadoutQualityMod.Settings.hpBucket = 10;
                 active = true;
                 startTick = Find.TickManager.TicksGame;
                 Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
                 Log.Message($"[LQTest] {scenario} started.");
             });
+        }
+
+        private static string NickFor(string s)
+        {
+            switch (s)
+            {
+                case "lq1": return "Ranged";
+                case "lq2": return "Melee";
+                case "lq3": return "Bucket";
+                case "lq4": return "Floor";
+                default: return "?";
+            }
         }
 
         private void Check(string name, bool pass, string detail)
@@ -292,20 +363,6 @@ namespace LQTestStaging
                 failed = true;
             }
             Log.Message($"[LQTest] {name}: {(pass ? "PASS" : "FAIL")} - {detail}");
-        }
-
-        private IEnumerable<(ThingWithComps thing, QualityCategory q)> CarriedWeapons()
-        {
-            if (subject.equipment?.Primary != null)
-            {
-                subject.equipment.Primary.TryGetQuality(out QualityCategory q);
-                yield return (subject.equipment.Primary, q);
-            }
-            foreach (ThingWithComps t in subject.inventory.innerContainer.OfType<ThingWithComps>().Where(t => t.def.IsWeapon))
-            {
-                t.TryGetQuality(out QualityCategory q);
-                yield return (t, q);
-            }
         }
 
         public override void GameComponentTick()
@@ -323,81 +380,25 @@ namespace LQTestStaging
             {
                 return;
             }
-            if (scenario == "qual1")
+            switch (scenario)
             {
-                TickQual1(tick);
-            }
-            else
-            {
-                TickQual2(tick);
+                case "lq1": TickRanged(tick); break;
+                case "lq2": TickMelee(tick); break;
+                case "lq3": TickBucket(tick); break;
+                case "lq4": TickFloor(tick); break;
             }
         }
 
-        // QUAL-1: filter, symmetric. Phase 0 (no entry, wide open): CE fetches
-        // SOME rifle — which one is CE's pathing business, not ours; any fetch with
-        // ranges wide open proves default inertness. Phase 1: set the range to
-        // exclude whatever the pawn holds and admit only the OTHER rifle — the drop
-        // gate must shed the carried one and the fetch gate must bring the other.
-        private QualityCategory fetchedQuality;
+        private ThingWithComps Primary => subject.equipment?.Primary;
 
-        private void TickQual1(int tick)
+        // LQ-1: phase 0 (toggle OFF) — normal rifle retained 1800 ticks; phase 1
+        // (ON) — swaps to the excellent rifle, the normal one dropped unforbidden.
+        private void TickRanged(int tick)
         {
             ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
             if (phase == 0)
             {
-                var carried = CarriedWeapons().Where(c => c.thing.def == rifle).ToList();
-                if (carried.Count > 0)
-                {
-                    fetchedQuality = carried[0].q;
-                    Check("default-inert-fetches", true, $"fetched {fetchedQuality} rifle with ranges wide open");
-                    var comp = LQGameComponent.Instance.GetEntry(subject.GetLoadout().uniqueID, create: true);
-                    comp.quality = fetchedQuality == QualityCategory.Awful
-                        ? new QualityRange(QualityCategory.Good, QualityCategory.Legendary)
-                        : new QualityRange(QualityCategory.Awful, QualityCategory.Poor);
-                    phase = 1;
-                    startTick = tick;
-                    return;
-                }
-                if (tick - startTick > 20000)
-                {
-                    Check("default-inert-fetches", false,
-                        $"never fetched a rifle; job={subject.CurJobDef?.defName}");
-                    Finish();
-                }
-                return;
-            }
-            if (phase == 1)
-            {
-                QualityCategory wanted = fetchedQuality == QualityCategory.Awful
-                    ? QualityCategory.Excellent : QualityCategory.Awful;
-                var carried = CarriedWeapons().Where(c => c.thing.def == rifle).ToList();
-                bool hasWanted = carried.Any(c => c.q == wanted);
-                bool hasOld = carried.Any(c => c.q == fetchedQuality);
-                if (hasWanted && !hasOld)
-                {
-                    Check("floor-drops-and-refetches", true, $"{fetchedQuality} shed, {wanted} fetched");
-                    Finish();
-                    return;
-                }
-                if (tick - startTick > 30000)
-                {
-                    Check("floor-drops-and-refetches", false,
-                        $"carried={string.Join(",", carried.Select(c => c.q.ToString()))} job={subject.CurJobDef?.defName}");
-                    Finish();
-                }
-            }
-        }
-
-        // QUAL-2: upgrade. Phase 0 (toggle OFF): 1800 ticks, normal rifle stays.
-        // Phase 1 (ON): equipped rifle becomes excellent, the normal one lies
-        // dropped unforbidden, and the steel gladius is NOT swapped for the
-        // plasteel one (same-stuff rule).
-        private void TickQual2(int tick)
-        {
-            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
-            if (phase == 0)
-            {
-                subject.equipment.Primary.TryGetQuality(out QualityCategory q);
+                Primary.TryGetQuality(out QualityCategory q);
                 if (q != QualityCategory.Normal)
                 {
                     Check("off-no-upgrade", false, $"swapped with toggle OFF: quality={q}");
@@ -413,36 +414,158 @@ namespace LQTestStaging
                 }
                 return;
             }
-            if (phase == 1)
+            Primary.TryGetQuality(out QualityCategory pq);
+            if (Primary?.def == rifle && pq == QualityCategory.Excellent)
             {
-                subject.equipment.Primary.TryGetQuality(out QualityCategory q);
-                if (subject.equipment.Primary?.def == rifle && q == QualityCategory.Excellent)
+                Check("ranged-upgrade-swaps", true, "excellent rifle equipped");
+                Thing droppedNormal = NearbyDropped(rifle, t =>
+                    t.TryGetQuality(out QualityCategory dq) && dq == QualityCategory.Normal);
+                Check("old-dropped-unforbidden",
+                    droppedNormal != null && !droppedNormal.IsForbidden(Faction.OfPlayer),
+                    $"dropped={(droppedNormal != null)} forbidden={droppedNormal?.IsForbidden(Faction.OfPlayer)}");
+                Finish();
+                return;
+            }
+            Timeout("ranged-upgrade-swaps", tick, $"primary={Primary?.def?.defName}:{pq} job={subject.CurJobDef?.defName}");
+        }
+
+        // LQ-2: melee ranks by DPS, which folds material — the plasteel excellent
+        // gladius must beat the carried steel normal one (the old same-stuff rule
+        // would have kept steel).
+        private void TickMelee(int tick)
+        {
+            if (phase == 0)
+            {
+                LoadoutQualityMod.Settings.autoUpgrade = true;
+                phase = 1;
+                startTick = tick;
+                return;
+            }
+            ThingWithComps p = Primary;
+            if (p != null && p.def.defName == "MeleeWeapon_Gladius" && p.Stuff == ThingDefOf.Plasteel)
+            {
+                Check("melee-upgrades-across-material", true, "plasteel gladius equipped (DPS beat steel)");
+                Thing droppedSteel = NearbyDropped(ThingDef.Named("MeleeWeapon_Gladius"),
+                    t => t.Stuff == ThingDefOf.Steel);
+                Check("old-dropped-unforbidden",
+                    droppedSteel != null && !droppedSteel.IsForbidden(Faction.OfPlayer),
+                    $"dropped={(droppedSteel != null)} forbidden={droppedSteel?.IsForbidden(Faction.OfPlayer)}");
+                Finish();
+                return;
+            }
+            Timeout("melee-upgrades-across-material", tick,
+                $"primary={p?.def?.defName} stuff={p?.Stuff?.defName} job={subject.CurJobDef?.defName}");
+        }
+
+        // LQ-3: HP-bucket tiebreak. Phase 0 (ON) — an excellent rifle at the SAME
+        // bucket as carried must NOT tempt a swap for 1800 ticks. Phase 1 — a
+        // full-HP excellent rifle (higher bucket) must win.
+        private void TickBucket(int tick)
+        {
+            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
+            int bucketSize = LoadoutQualityMod.Settings.hpBucket;
+            if (phase == 0)
+            {
+                if (carriedBucketId == 0)
                 {
-                    Check("upgrade-swaps-equipped", true, "excellent rifle equipped");
-                    // The pawn-adjacent instance ONLY — quicktest maps scatter their own
-                    // random weapons, and a map-wide FirstOrDefault once sampled a
-                    // pre-existing forbidden rifle from across the map (id mismatch
-                    // caught by fingerprinting).
-                    Thing droppedNormal = subject.Map.listerThings.ThingsOfDef(rifle)
-                        .Where(t => t.Spawned && t.Position.DistanceTo(subject.Position) < 8f)
-                        .FirstOrDefault(t => t.TryGetQuality(out QualityCategory dq) && dq == QualityCategory.Normal);
-                    Check("old-dropped-unforbidden",
-                        droppedNormal != null && !droppedNormal.IsForbidden(Faction.OfPlayer),
-                        $"dropped={(droppedNormal != null)} id={droppedNormal?.thingIDNumber} forbidden={droppedNormal?.IsForbidden(Faction.OfPlayer)}");
-                    ThingWithComps gladius = subject.inventory.innerContainer.OfType<ThingWithComps>()
-                        .FirstOrDefault(t => t.def.defName == "MeleeWeapon_Gladius");
-                    Check("same-stuff-rule-holds",
-                        gladius != null && gladius.Stuff == ThingDefOf.Steel,
-                        $"gladius stuff={gladius?.Stuff?.defName ?? "missing"} (plasteel bait must be ignored)");
+                    LoadoutQualityMod.Settings.autoUpgrade = true;
+                    carriedBucketId = Primary.thingIDNumber;
+                    carriedBucketValue = Primary.HitPoints / bucketSize;
+                }
+                if (Primary == null || Primary.thingIDNumber != carriedBucketId)
+                {
+                    Check("equal-bucket-no-thrash", false,
+                        $"swapped to a same-bucket copy: primaryId={Primary?.thingIDNumber}");
                     Finish();
                     return;
                 }
-                if (tick - startTick > 30000)
+                if (tick - startTick > 1800)
                 {
-                    Check("upgrade-swaps-equipped", false,
-                        $"primary={subject.equipment.Primary?.def?.defName}:{q} job={subject.CurJobDef?.defName}");
-                    Finish();
+                    Check("equal-bucket-no-thrash", true, "same-bucket copy ignored for 1800 ticks");
+                    // Now stage the higher-bucket winner: a full-HP excellent rifle.
+                    ThingWithComps winner = MakeExcellent(rifle);
+                    winner.HitPoints = winner.MaxHitPoints;
+                    GenSpawn.Spawn(winner, CellFinder.RandomClosewalkCellNear(subject.Position, subject.Map, 4), subject.Map);
+                    phase = 1;
+                    startTick = tick;
                 }
+                return;
+            }
+            if (Primary != null && Primary.thingIDNumber != carriedBucketId
+                && Primary.HitPoints / bucketSize > carriedBucketValue)
+            {
+                Check("higher-bucket-swaps", true,
+                    $"swapped to higher-bucket copy (hp={Primary.HitPoints}, bucket={Primary.HitPoints / bucketSize} > {carriedBucketValue})");
+                Finish();
+                return;
+            }
+            Timeout("higher-bucket-swaps", tick,
+                $"primaryHp={Primary?.HitPoints} bucket={(Primary != null ? Primary.HitPoints / bucketSize : -1)} job={subject.CurJobDef?.defName}");
+        }
+
+        // LQ-4: acquisition floor. Phase 0 (ON, floor Good) — a Poor rifle (better
+        // than the carried Awful, below the floor) must be refused. Phase 1 — an
+        // Excellent rifle (above the floor) must win.
+        private void TickFloor(int tick)
+        {
+            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
+            if (phase == 0)
+            {
+                if (tick == startTick + 30 || !LoadoutQualityMod.Settings.autoUpgrade)
+                {
+                    LoadoutQualityMod.Settings.autoUpgrade = true;
+                    LoadoutQualityMod.Settings.minQuality = QualityCategory.Good;
+                }
+                Primary.TryGetQuality(out QualityCategory q);
+                if (q != QualityCategory.Awful)
+                {
+                    Check("floor-refuses-below", false, $"acquired below-floor weapon: quality={q}");
+                    Finish();
+                    return;
+                }
+                if (tick - startTick > 1800)
+                {
+                    Check("floor-refuses-below", true, "Poor rifle refused under the Good floor; Awful retained");
+                    ThingWithComps winner = MakeExcellent(rifle);
+                    GenSpawn.Spawn(winner, CellFinder.RandomClosewalkCellNear(subject.Position, subject.Map, 4), subject.Map);
+                    phase = 1;
+                    startTick = tick;
+                }
+                return;
+            }
+            Primary.TryGetQuality(out QualityCategory pq);
+            if (Primary?.def == rifle && pq == QualityCategory.Excellent)
+            {
+                Check("above-floor-swaps", true, "excellent rifle acquired once available");
+                Finish();
+                return;
+            }
+            Timeout("above-floor-swaps", tick, $"primary={Primary?.def?.defName}:{pq} job={subject.CurJobDef?.defName}");
+        }
+
+        private ThingWithComps MakeExcellent(ThingDef def)
+        {
+            var thing = (ThingWithComps)ThingMaker.MakeThing(def, def.MadeFromStuff ? GenStuff.DefaultStuffFor(def) : null);
+            thing.TryGetComp<CompQuality>()?.SetQuality(QualityCategory.Excellent, ArtGenerationContext.Colony);
+            return thing;
+        }
+
+        // Pawn-adjacent instance ONLY — quicktest maps scatter their own random
+        // weapons, and a map-wide search once sampled a pre-existing forbidden weapon
+        // from across the map (id mismatch caught by fingerprinting).
+        private Thing NearbyDropped(ThingDef def, Predicate<Thing> match)
+        {
+            return subject.Map.listerThings.ThingsOfDef(def)
+                .Where(t => t.Spawned && t.Position.DistanceTo(subject.Position) < 8f)
+                .FirstOrDefault(t => match(t));
+        }
+
+        private void Timeout(string name, int tick, string detail)
+        {
+            if (tick - startTick > 30000)
+            {
+                Check(name, false, detail);
+                Finish();
             }
         }
 

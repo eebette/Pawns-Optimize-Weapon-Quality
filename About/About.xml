@@ -6,10 +6,13 @@
     <supportedVersions>
         <li>1.6</li>
     </supportedVersions>
-    <description>Quality control for Combat Extended loadouts — the same filters vanilla outfit policies have always had.
+    <description>Quality control for Combat Extended loadouts — no extra interface, just a settings page.
 
-- Per-loadout quality and hit-point floors: loadout fetching skips items outside the ranges, and a carried weapon below the floor is dropped and replaced (exactly how apparel outside an outfit filter behaves). Ranges default wide open — the mod does nothing until you narrow them in the loadout dialog.
-- Auto weapon upgrade (toggleable): pawns swap loadout weapons for higher-quality copies of the same weapon and material when one is available. The old weapon is dropped in place, unforbidden, for your haulers.
+When a pawn is idle, it fetches the best available copy of each weapon its loadout calls for:
+- Guns: the highest-quality copy on the map, hit points breaking ties.
+- Melee weapons: the highest melee DPS — which folds in the material, so a plasteel copy rightly beats a higher-quality steel one — hit points breaking ties.
+
+Set the minimum quality worth acquiring and the hit-point tiebreak granularity in the mod settings. The replaced weapon is dropped in place, unforbidden, for your haulers.
 
 Requires Combat Extended. Works fine alongside Simple Sidearms and the CE+SS compatibility suite, but needs neither.</description>
     <modDependencies>

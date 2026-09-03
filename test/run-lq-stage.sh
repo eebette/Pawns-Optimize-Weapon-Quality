@@ -15,5 +15,5 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
     dotnet build "$REPO/Source/LoadoutQuality/LoadoutQuality.csproj" -c Release
     dotnet build "$REPO/test/StagingMod/Source/LQTestStaging.csproj" -c Release
 fi
-rm -f "$SAVEDATA/Saves"/QUAL-*.rws
+rm -f "$SAVEDATA/Saves"/QUAL-*.rws "$SAVEDATA/Saves"/LQ-*.rws
 exec "${GS[@]}" "$RIMWORLD" -savedatafolder="$SAVEDATA" -quicktest -lqstage

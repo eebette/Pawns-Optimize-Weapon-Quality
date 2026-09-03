@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using RimWorld;
@@ -8,14 +9,26 @@ namespace LoadoutQuality
 {
     public class LQSettings : ModSettings
     {
-        // Install-as-consent: upgrade ships ON. The filter needs no toggle — its
-        // ranges default wide open, so it is inert until a loadout narrows them.
+        // Install-as-consent: the upgrade behaviour ships ON — installing the mod is
+        // the opt-in. The two knobs below only TUNE it; they never gate it off.
         public bool autoUpgrade = true;
+
+        // Global floor: a candidate below this quality is never acquired, whatever
+        // the pawn currently holds ("never equip anything worse than Poor").
+        public QualityCategory minQuality = QualityCategory.Poor;
+
+        // Hit-point tiebreak granularity. When two candidates rank equal on the
+        // primary axis (quality for guns, melee DPS for melee weapons), the one in a
+        // higher hit-point BUCKET wins and equal buckets never swap — so a trivial
+        // durability difference does not send a pawn across the map. Larger = calmer.
+        public int hpBucket = 10;
 
         public override void ExposeData()
         {
             base.ExposeData();
             Scribe_Values.Look(ref autoUpgrade, "autoUpgrade", true);
+            Scribe_Values.Look(ref minQuality, "minQuality", QualityCategory.Poor);
+            Scribe_Values.Look(ref hpBucket, "hpBucket", 10);
         }
     }
 
@@ -28,100 +41,105 @@ namespace LoadoutQuality
             Settings = GetSettings<LQSettings>();
         }
 
-        public override string SettingsCategory()
-        {
-            return "Loadout Quality";
-        }
+        public override string SettingsCategory() => "Loadout Quality";
 
         public override void DoSettingsWindowContents(Rect inRect)
         {
             var listing = new Listing_Standard();
             listing.Begin(inRect);
+
             listing.CheckboxLabeled("Auto weapon upgrade", ref Settings.autoUpgrade,
-                "Pawns swap loadout weapons for a strictly higher-quality copy of the same weapon and material when one is available on the map. The replaced weapon is dropped in place, unforbidden. Quality/hit-point floors are set per loadout in the loadout dialog and need no global switch.");
+                "When idle, a pawn fetches the best available copy of each weapon its loadout "
+                + "calls for — highest quality for guns, highest melee DPS for melee weapons (so "
+                + "a better material wins), hit points breaking ties. The replaced weapon is "
+                + "dropped in place, unforbidden, for your haulers.");
+
+            listing.Gap();
+
+            listing.Label($"Never acquire below: {Settings.minQuality}");
+            Settings.minQuality = (QualityCategory)Mathf.RoundToInt(listing.Slider(
+                (int)Settings.minQuality, (int)QualityCategory.Awful, (int)QualityCategory.Legendary));
+
+            listing.Gap();
+
+            listing.Label($"Hit-point tiebreak bucket: {Settings.hpBucket}",
+                tooltip: "Two weapons that tie on quality (or melee DPS) only swap when their "
+                         + "hit points land in different buckets of this size. Larger = fewer "
+                         + "swaps over trivial durability gains.");
+            Settings.hpBucket = Mathf.RoundToInt(listing.Slider(Settings.hpBucket, 1, 50));
+
             listing.End();
         }
     }
 
-    /// <summary>Per-loadout quality/HP ranges, keyed by Loadout.uniqueID. A loadout
-    /// with wide-open ranges has no entry — absent means inert.</summary>
-    public class LQEntry : IExposable
+    /// <summary>Shared failure-doctrine guard (mirrors the suite's PatchGuard and
+    /// BAO's BAOGuard): a patch's Prepare() proves its target still exists, and on a
+    /// miss logs a named, player-readable consequence and returns false so that one
+    /// class is skipped (inert) while the rest still apply.</summary>
+    internal static class LQGuard
     {
-        public QualityRange quality = QualityRange.All;
-        public FloatRange hitPoints = FloatRange.ZeroToOne;
+        internal const string LogPrefix = "[Loadout Quality] ";
 
-        public bool IsDefault => quality == QualityRange.All
-                                 && hitPoints.min <= 0f && hitPoints.max >= 1f;
-
-        public void ExposeData()
+        internal static bool Require(Type type, string method, Type[] args, string consequence)
         {
-            Scribe_Values.Look(ref quality, "quality", QualityRange.All);
-            Scribe_Values.Look(ref hitPoints, "hitPoints", FloatRange.ZeroToOne);
-        }
-    }
-
-    public class LQGameComponent : GameComponent
-    {
-        public static LQGameComponent Instance { get; private set; }
-
-        private Dictionary<int, LQEntry> entries = new Dictionary<int, LQEntry>();
-        private List<int> scribeKeys;
-        private List<LQEntry> scribeVals;
-
-        public LQGameComponent(Game game)
-        {
-            Instance = this;
-        }
-
-        public LQEntry GetEntry(int loadoutId, bool create)
-        {
-            if (entries.TryGetValue(loadoutId, out LQEntry entry))
+            if (type != null && AccessTools.Method(type, method, args) != null)
             {
-                return entry;
+                return true;
             }
-            if (!create)
-            {
-                return null;
-            }
-            entry = new LQEntry();
-            entries[loadoutId] = entry;
-            return entry;
-        }
-
-        public void PruneDefault(int loadoutId)
-        {
-            if (entries.TryGetValue(loadoutId, out LQEntry entry) && entry.IsDefault)
-            {
-                entries.Remove(loadoutId);
-            }
-        }
-
-        public override void ExposeData()
-        {
-            base.ExposeData();
-            if (Scribe.mode == LoadSaveMode.Saving)
-            {
-                foreach (int id in new List<int>(entries.Keys))
-                {
-                    PruneDefault(id);
-                }
-            }
-            Scribe_Collections.Look(ref entries, "entries", LookMode.Value, LookMode.Deep,
-                ref scribeKeys, ref scribeVals);
-            if (Scribe.mode == LoadSaveMode.PostLoadInit && entries == null)
-            {
-                entries = new Dictionary<int, LQEntry>();
-            }
+            Log.Error($"{LogPrefix}{type?.Name}.{method} not found — {consequence} "
+                      + "Combat Extended probably moved it.");
+            return false;
         }
     }
 
     [StaticConstructorOnStartup]
     public static class Bootstrap
     {
+        public const string HarmonyId = "eebette.CELoadoutQuality";
+
         static Bootstrap()
         {
-            new Harmony("eebette.CELoadoutQuality").PatchAll(typeof(Bootstrap).Assembly);
-            Log.Message("[LoadoutQuality] Patches installed.");
+            // Per class, not PatchAll: an upstream member moving (CE renames a method
+            // or a parameter — Harmony binds parameters by name, invisible to a
+            // Prepare guard) costs THAT one patch with a named, player-readable error,
+            // not the whole mod half-applied mid-assembly.
+            var harmony = new Harmony(HarmonyId);
+            int applied = 0;
+            var failures = new List<string>();
+            foreach (Type type in typeof(Bootstrap).Assembly.GetTypes())
+            {
+                try
+                {
+                    // Attribute probe INSIDE the try: decoding [HarmonyPatch] resolves
+                    // its typeof() args, so upstream type-level drift there also costs
+                    // one class, not the loop.
+                    if (type.GetCustomAttributes(typeof(HarmonyPatch), inherit: false).Length == 0)
+                    {
+                        continue;
+                    }
+                    // A Prepare-false class returns no patched methods and is SKIPPED.
+                    var patched = harmony.CreateClassProcessor(type).Patch();
+                    if (patched != null && patched.Count > 0)
+                    {
+                        applied++;
+                    }
+                }
+                catch (Exception e)
+                {
+                    failures.Add(type.Name);
+                    Log.Error($"{LQGuard.LogPrefix}Patch class {type.Name} could not be applied — "
+                              + $"that feature is inactive, the rest still work. {e}");
+                }
+            }
+            if (failures.Count > 0)
+            {
+                Log.Warning($"{LQGuard.LogPrefix}Installed {applied} patch class(es); "
+                            + $"{failures.Count} failed ({string.Join(", ", failures)}).");
+            }
+            else
+            {
+                Log.Message($"{LQGuard.LogPrefix}Installed {applied} patch class(es).");
+            }
         }
     }
 }
