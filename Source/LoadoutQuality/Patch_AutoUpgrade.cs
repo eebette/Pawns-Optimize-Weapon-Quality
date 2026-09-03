@@ -74,6 +74,10 @@ namespace LoadoutQuality
             {
                 return;
             }
+            if (IsSidelined(pawn))
+            {
+                return; // a recent swap failed to change anything — back off, don't re-issue it every tick
+            }
 
             foreach (LoadoutSlot slot in loadout.Slots)
             {
@@ -134,9 +138,8 @@ namespace LoadoutQuality
         /// <summary>Strict-better on the class key, hit-point bucket as tiebreak.
         /// Strictness in both directions guarantees termination: once the pawn holds
         /// the winner, no equal-or-worse copy can win it back, so the swap never
-        /// ping-pongs. Ranged ties on quality then on HP bucket; melee ties on DPS
-        /// (deterministic per def+material+quality, so an exact float match is a real
-        /// tie) then on HP bucket.</summary>
+        /// ping-pongs. Ranged ties on quality then on HP bucket; melee ties on
+        /// wielder-independent DPS (see MeleeDps) then on HP bucket.</summary>
         private static bool Beats(Thing candidate, Thing incumbent, bool ranged)
         {
             if (ranged)
@@ -150,14 +153,30 @@ namespace LoadoutQuality
             }
             else
             {
-                float dc = candidate.GetStatValue(StatDefOf.MeleeWeapon_AverageDPS);
-                float di = incumbent.GetStatValue(StatDefOf.MeleeWeapon_AverageDPS);
+                float dc = MeleeDps(candidate);
+                float di = MeleeDps(incumbent);
                 if (dc != di)
                 {
                     return dc > di;
                 }
             }
             return HpBucket(candidate) > HpBucket(incumbent);
+        }
+
+        /// <summary>Melee DPS measured WIELDER-INDEPENDENTLY, from def+material+quality
+        /// alone. MeleeWeapon_AverageDPS on an instance folds in the wielder's melee
+        /// factors when (and only when) the weapon is EQUIPPED — the stat worker reads
+        /// the weapon's holder — so comparing an equipped incumbent's value against a
+        /// ground candidate's would compare wielded DPS against bare DPS and break the
+        /// determinism the termination proof rests on. Requesting the stat abstractly
+        /// (no thing, hence no holder) gives every weapon the same basis; the pawn's
+        /// factors are a constant multiplier across all its weapons, so dropping them
+        /// leaves the RANKING unchanged. The stat is still called, never recomputed.</summary>
+        private static float MeleeDps(Thing t)
+        {
+            t.TryGetQuality(out QualityCategory q);
+            return StatDefOf.MeleeWeapon_AverageDPS.Worker.GetValue(
+                StatRequest.For(t.def, t.Stuff, q));
         }
 
         private static QualityCategory QualityOf(Thing t)
@@ -177,6 +196,39 @@ namespace LoadoutQuality
             }
             return pawn.inventory?.innerContainer?.OfType<ThingWithComps>()
                 .FirstOrDefault(t => t.def == def);
+        }
+
+        // Per-pawn back-off. A swap that failed to change the carried weapon (a caught
+        // structural failure, or no cell to set the old weapon down) is a persistent
+        // no-op: because our non-null result makes CE's throttle keep the pawn
+        // immediately re-eligible, the identical swap would re-issue every think tick —
+        // a walk-loop that starves real work. Sidelining the pawn's upgrades for a
+        // spell lets a persistent failure self-throttle, then retry (the obstruction
+        // may have cleared) instead of looping.
+        private const int SidelineTicks = 2500;
+        private static readonly Dictionary<int, int> sidelinedUntil = new Dictionary<int, int>();
+
+        internal static void SidelineAfterFailure(Pawn pawn)
+        {
+            if (pawn == null)
+            {
+                return;
+            }
+            int now = GenTicks.TicksGame;
+            if (sidelinedUntil.Count > 64)
+            {
+                foreach (int id in sidelinedUntil.Where(kv => kv.Value <= now).Select(kv => kv.Key).ToList())
+                {
+                    sidelinedUntil.Remove(id);
+                }
+            }
+            sidelinedUntil[pawn.thingIDNumber] = now + SidelineTicks;
+        }
+
+        private static bool IsSidelined(Pawn pawn)
+        {
+            return sidelinedUntil.TryGetValue(pawn.thingIDNumber, out int until)
+                   && GenTicks.TicksGame < until;
         }
     }
 
@@ -221,34 +273,51 @@ namespace LoadoutQuality
             // and a no-op, not a raw job exception spamming the log.
             swap.initAction = () =>
             {
+                bool swapped = false;
                 try
                 {
-                    DoSwap();
+                    swapped = DoSwap();
                 }
                 catch (Exception e)
                 {
                     Log.ErrorOnce(LQGuard.LogPrefix + "Weapon swap failed mid-job; the pawn keeps its weapon. " + e, 0x0CE10002);
+                }
+                if (!swapped)
+                {
+                    GetUpdateLoadoutJob_Patch.SidelineAfterFailure(pawn);
                 }
             };
             swap.defaultCompleteMode = ToilCompleteMode.Instant;
             yield return swap;
         }
 
-        private void DoSwap()
+        /// <summary>Performs the swap. Returns true when the pawn ends up holding the
+        /// new weapon (or there was nothing to do); false when the swap changed
+        /// nothing, so the caller can sideline the pawn instead of re-issuing it.
+        /// Loss-proof: the old weapon is only removed once we know the new one can take
+        /// its place, and the new weapon is never left despawned-and-unowned.</summary>
+        private bool DoSwap()
         {
             var newWeapon = (ThingWithComps)NewWeapon;
             var oldWeapon = OldWeapon as ThingWithComps;
             if (newWeapon == null || newWeapon.Destroyed)
             {
-                return;
+                return true; // the winner is gone; nothing to retry
             }
             bool wasEquipped = pawn.equipment?.Primary == oldWeapon;
+            Thing dropped = null;
             if (oldWeapon != null && !oldWeapon.Destroyed)
             {
-                Thing dropped = null;
                 if (wasEquipped)
                 {
-                    pawn.equipment.TryDropEquipment(oldWeapon, out ThingWithComps droppedEq, pawn.Position, forbid: false);
+                    // Clear the primary slot BEFORE taking the new weapon off the map.
+                    // TryDropEquipment returns false when no cell can receive the drop;
+                    // proceeding would despawn the new weapon into a slot AddEquipment
+                    // then refuses (it logs and no-ops) — destroying the upgrade.
+                    if (!pawn.equipment.TryDropEquipment(oldWeapon, out ThingWithComps droppedEq, pawn.Position, forbid: false))
+                    {
+                        return false;
+                    }
                     dropped = droppedEq;
                 }
                 else if (pawn.inventory.innerContainer.Contains(oldWeapon))
@@ -267,14 +336,20 @@ namespace LoadoutQuality
             }
             if (wasEquipped)
             {
-                pawn.equipment.AddEquipment(newWeapon);
+                pawn.equipment.AddEquipment(newWeapon); // slot cleared above, so this takes
             }
-            else
+            else if (!pawn.inventory.innerContainer.TryAdd(newWeapon, true))
             {
-                pawn.inventory.innerContainer.TryAdd(newWeapon, true);
+                // Could not stow it — put it back on the map rather than lose it.
+                if (!newWeapon.Spawned)
+                {
+                    GenPlace.TryPlaceThing(newWeapon, pawn.Position, pawn.Map, ThingPlaceMode.Near);
+                }
+                return false;
             }
             pawn.TryGetComp<CompInventory>()?.UpdateInventory();
             SidearmsBridge.NotifySwap(pawn, oldWeapon, newWeapon);
+            return true;
         }
     }
 
@@ -284,6 +359,7 @@ namespace LoadoutQuality
         private static bool initialized;
         private static MethodInfo getMemory;
         private static MethodInfo informAdded;
+        private static MethodInfo informDropped;
 
         public static void NotifySwap(Pawn pawn, Thing oldWeapon, Thing newWeapon)
         {
@@ -297,16 +373,29 @@ namespace LoadoutQuality
                         BindingFlags.Public | BindingFlags.Static);
                     informAdded = memoryType.GetMethod("InformOfAddedSidearm",
                         BindingFlags.Public | BindingFlags.Instance);
+                    informDropped = memoryType.GetMethod("InformOfDroppedSidearm",
+                        BindingFlags.Public | BindingFlags.Instance);
                 }
             }
-            if (getMemory == null || informAdded == null || newWeapon == null)
+            if (getMemory == null || newWeapon == null)
             {
                 return;
             }
             try
             {
                 object memory = getMemory.Invoke(null, new object[] { pawn, true });
-                if (memory != null)
+                if (memory == null)
+                {
+                    return;
+                }
+                // Symmetric: forget the old copy (intentional drop — do not re-acquire
+                // it) AND remember the new one, so SS memory tracks the upgrade rather
+                // than a phantom pair.
+                if (informDropped != null && oldWeapon is ThingWithComps oldTwc)
+                {
+                    informDropped.Invoke(memory, new object[] { oldTwc, true });
+                }
+                if (informAdded != null)
                 {
                     informAdded.Invoke(memory, new object[] { newWeapon });
                 }

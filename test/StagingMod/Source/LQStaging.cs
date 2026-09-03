@@ -113,13 +113,22 @@ namespace LQTestStaging
         private void Stage2(Map map)
         {
             Pawn pawn = SpawnColonist(map, "Melee", new IntVec3(-2, 0, 0));
+            ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
             ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
 
-            ThingWithComps carried = MakeWithQuality(gladius, ThingDefOf.Steel, QualityCategory.Normal);
-            pawn.equipment.AddEquipment(carried);
+            // Rifle occupies the primary slot so the gladius stays an INVENTORY
+            // sidearm — this exercises the inventory swap branch (lq1 covers the
+            // equipped branch). No better rifle is staged, so the rifle slot is inert.
+            ThingWithComps carriedRifle = MakeWithQuality(rifle, null, QualityCategory.Normal);
+            pawn.equipment.AddEquipment(carriedRifle);
+            LoadMag(pawn, carriedRifle);
+            ThingWithComps carriedGladius = MakeWithQuality(gladius, ThingDefOf.Steel, QualityCategory.Normal);
+            pawn.inventory.innerContainer.TryAdd(carriedGladius, true);
+            SpawnAmmoFor(map, rifle);
+
             SpawnWithQuality(map, gladius, ThingDefOf.Plasteel, QualityCategory.Excellent, anchor + new IntVec3(8, 0, -4));
 
-            GiveLoadout(pawn, "LQ melee test", gladius);
+            GiveLoadout(pawn, "LQ melee test", rifle, gladius);
         }
 
         private void Stage3(Map map)
@@ -441,10 +450,11 @@ namespace LQTestStaging
                 startTick = tick;
                 return;
             }
-            ThingWithComps p = Primary;
-            if (p != null && p.def.defName == "MeleeWeapon_Gladius" && p.Stuff == ThingDefOf.Plasteel)
+            ThingWithComps invGladius = subject.inventory.innerContainer.OfType<ThingWithComps>()
+                .FirstOrDefault(t => t.def.defName == "MeleeWeapon_Gladius");
+            if (invGladius != null && invGladius.Stuff == ThingDefOf.Plasteel)
             {
-                Check("melee-upgrades-across-material", true, "plasteel gladius equipped (DPS beat steel)");
+                Check("melee-upgrades-across-material", true, "plasteel gladius in inventory (DPS beat steel)");
                 Thing droppedSteel = NearbyDropped(ThingDef.Named("MeleeWeapon_Gladius"),
                     t => t.Stuff == ThingDefOf.Steel);
                 Check("old-dropped-unforbidden",
@@ -454,7 +464,7 @@ namespace LQTestStaging
                 return;
             }
             Timeout("melee-upgrades-across-material", tick,
-                $"primary={p?.def?.defName} stuff={p?.Stuff?.defName} job={subject.CurJobDef?.defName}");
+                $"invGladiusStuff={invGladius?.Stuff?.defName ?? "none"} job={subject.CurJobDef?.defName}");
         }
 
         // LQ-3: HP-bucket tiebreak. Phase 0 (ON) — an excellent rifle at the SAME
