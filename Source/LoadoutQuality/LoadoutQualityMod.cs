@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CombatExtended;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -139,6 +140,19 @@ namespace LoadoutQuality
             else
             {
                 Log.Message($"{LQGuard.LogPrefix}Installed {applied} patch class(es).");
+            }
+
+            // Clear the per-pawn sideline cache when CE clears its own (game load /
+            // cache reset), so a stale entry cannot survive into another game. Wrapped
+            // so a CE rename of this hook costs only the sideline-clear, not the mod.
+            try
+            {
+                CacheClearComponent.AddClearCacheAction(GetUpdateLoadoutJob_Patch.ClearSidelines);
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"{LQGuard.LogPrefix}Could not register the sideline cache-clear; a stale "
+                            + $"back-off could persist across a reload until it expires. {e}");
             }
         }
     }

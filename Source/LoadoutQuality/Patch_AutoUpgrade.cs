@@ -105,6 +105,12 @@ namespace LoadoutQuality
         /// is skipped in favour of the best REACHABLE one.</summary>
         private static Thing FindBest(Pawn pawn, ThingDef def, ThingWithComps carried)
         {
+            // Never propose shedding a quest-locked weapon — CE's own loadout drop
+            // path refuses it, and a quest lodger passes our colonist guard.
+            if (pawn.IsItemQuestLocked(carried))
+            {
+                return null;
+            }
             bool ranged = def.IsRangedWeapon;
             QualityCategory floor = LoadoutQualityMod.Settings.minQuality;
             Thing best = carried;
@@ -126,6 +132,13 @@ namespace LoadoutQuality
                 {
                     continue;
                 }
+                // The pawn must actually be allowed to wield it — biocode, persona
+                // bond, ideology role. CE's own pickup validator checks this; without
+                // it the swap could equip an unusable weapon (and drop the pawn's own).
+                if (!EquipmentUtility.CanEquip(candidate, pawn))
+                {
+                    continue;
+                }
                 if (!pawn.CanReserveAndReach(candidate, PathEndMode.ClosestTouch, Danger.None))
                 {
                     continue;
@@ -139,7 +152,8 @@ namespace LoadoutQuality
         /// Strictness in both directions guarantees termination: once the pawn holds
         /// the winner, no equal-or-worse copy can win it back, so the swap never
         /// ping-pongs. Ranged ties on quality then on HP bucket; melee ties on
-        /// wielder-independent DPS (see MeleeDps) then on HP bucket.</summary>
+        /// MeleeWeapon_AverageDPS (which folds material AND quality) then on HP
+        /// bucket.</summary>
         private static bool Beats(Thing candidate, Thing incumbent, bool ranged)
         {
             if (ranged)
@@ -163,20 +177,23 @@ namespace LoadoutQuality
             return HpBucket(candidate) > HpBucket(incumbent);
         }
 
-        /// <summary>Melee DPS measured WIELDER-INDEPENDENTLY, from def+material+quality
-        /// alone. MeleeWeapon_AverageDPS on an instance folds in the wielder's melee
-        /// factors when (and only when) the weapon is EQUIPPED — the stat worker reads
-        /// the weapon's holder — so comparing an equipped incumbent's value against a
-        /// ground candidate's would compare wielded DPS against bare DPS and break the
-        /// determinism the termination proof rests on. Requesting the stat abstractly
-        /// (no thing, hence no holder) gives every weapon the same basis; the pawn's
-        /// factors are a constant multiplier across all its weapons, so dropping them
-        /// leaves the RANKING unchanged. The stat is still called, never recomputed.</summary>
+        /// <summary>Melee DPS via the weapon INSTANCE. Under Combat Extended (our hard
+        /// dependency) MeleeWeapon_AverageDPS is served by CE's own StatWorker, which
+        /// reads quality and material off the passed Thing — so the instance path folds
+        /// both in and ranks materials correctly. An ABSTRACT request (no Thing) would
+        /// instead hit CE's ownerEquipment-null branch and collapse to the tool's raw
+        /// power — a per-def constant, blind to quality and material — so it must NOT be
+        /// used here. The stat is called, never recomputed.
+        ///
+        /// Residual, accepted: CE scales an EQUIPPED-PRIMARY weapon's value by the
+        /// wielder's melee-skill damage variation (ground candidates and inventory
+        /// sidearms are unaffected), so ranking a pawn's equipped-primary MELEE weapon
+        /// carries a small skill-based skew. Normalising it out would mean reproducing
+        /// CE's variation formula (a mirror); the case is narrow (melee as the main
+        /// weapon, not a sidearm) and documented rather than mirrored.</summary>
         private static float MeleeDps(Thing t)
         {
-            t.TryGetQuality(out QualityCategory q);
-            return StatDefOf.MeleeWeapon_AverageDPS.Worker.GetValue(
-                StatRequest.For(t.def, t.Stuff, q));
+            return t.GetStatValue(StatDefOf.MeleeWeapon_AverageDPS);
         }
 
         private static QualityCategory QualityOf(Thing t)
@@ -230,6 +247,12 @@ namespace LoadoutQuality
             return sidelinedUntil.TryGetValue(pawn.thingIDNumber, out int until)
                    && GenTicks.TicksGame < until;
         }
+
+        // thingIDNumber and the tick clock both reset per game, but this static lives
+        // for the whole process — so a stale high-tick entry could mis-gate a pawn
+        // after loading an earlier save or a second colony. CE clears its analogous
+        // _throttle the same way; Bootstrap registers this on the same cache-clear.
+        internal static void ClearSidelines() => sidelinedUntil.Clear();
     }
 
     [DefOf]
@@ -322,8 +345,13 @@ namespace LoadoutQuality
                 }
                 else if (pawn.inventory.innerContainer.Contains(oldWeapon))
                 {
-                    pawn.inventory.innerContainer.TryDrop(oldWeapon, pawn.Position, pawn.Map,
-                        ThingPlaceMode.Near, out dropped);
+                    // Abort rather than add the new one on top of an undropped old one
+                    // (which would leave the pawn holding both).
+                    if (!pawn.inventory.innerContainer.TryDrop(oldWeapon, pawn.Position, pawn.Map,
+                            ThingPlaceMode.Near, out dropped))
+                    {
+                        return false;
+                    }
                 }
                 // Other mods (e.g. Simple Sidearms' drop handling) may forbid dropped
                 // weapons; the replaced copy is a hand-me-down for haulers and other
@@ -388,10 +416,21 @@ namespace LoadoutQuality
                 {
                     return;
                 }
-                // Symmetric: forget the old copy (intentional drop — do not re-acquire
-                // it) AND remember the new one, so SS memory tracks the upgrade rather
-                // than a phantom pair.
-                if (informDropped != null && oldWeapon is ThingWithComps oldTwc)
+                // SS keys sidearms by def+material pair, not by instance, and does not
+                // observe our raw drop/add. When the pair is UNCHANGED (every ranged
+                // upgrade; a same-material melee upgrade), SS's memory is already
+                // correct — and informing it would drop the pair's remembered count to
+                // zero between the two calls, which SS reads as "no copies left" and
+                // clears the player's forced/preferred/default flag. So only tell SS
+                // when the pair actually changes.
+                var oldTwc = oldWeapon as ThingWithComps;
+                bool samePair = oldTwc != null
+                    && oldTwc.def == newWeapon.def && oldTwc.Stuff == newWeapon.Stuff;
+                if (samePair)
+                {
+                    return;
+                }
+                if (informDropped != null && oldTwc != null)
                 {
                     informDropped.Invoke(memory, new object[] { oldTwc, true });
                 }

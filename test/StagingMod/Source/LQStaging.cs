@@ -126,7 +126,12 @@ namespace LQTestStaging
             pawn.inventory.innerContainer.TryAdd(carriedGladius, true);
             SpawnAmmoFor(map, rifle);
 
-            SpawnWithQuality(map, gladius, ThingDefOf.Plasteel, QualityCategory.Excellent, anchor + new IntVec3(8, 0, -4));
+            // Phase-0 bait: a SAME-MATERIAL, higher-QUALITY gladius at full HP. Every
+            // gladius here is full HP, so the HP bucket is neutral and the swap can
+            // only be driven by melee DPS. The material winner (plasteel) is staged by
+            // the runner in phase 1. (The old lq2 relied on plasteel's higher HP
+            // bucket, so it passed even when DPS was quality/material-blind.)
+            SpawnWithQuality(map, gladius, ThingDefOf.Steel, QualityCategory.Excellent, anchor + new IntVec3(8, 0, -4));
 
             GiveLoadout(pawn, "LQ melee test", rifle, gladius);
         }
@@ -438,33 +443,58 @@ namespace LQTestStaging
             Timeout("ranged-upgrade-swaps", tick, $"primary={Primary?.def?.defName}:{pq} job={subject.CurJobDef?.defName}");
         }
 
-        // LQ-2: melee ranks by DPS, which folds material — the plasteel excellent
-        // gladius must beat the carried steel normal one (the old same-stuff rule
-        // would have kept steel).
+        // LQ-2: melee ranks by MeleeWeapon_AverageDPS (folds material AND quality),
+        // with HP held equal so the HP bucket cannot be what drives the swap. Phase 0
+        // (same material): a steel Excellent gladius must beat the carried steel Normal
+        // one on QUALITY. Phase 1 (same quality): a plasteel Excellent gladius must
+        // beat the steel Excellent one on MATERIAL. All on the inventory-sidearm branch.
+        private ThingWithComps InvGladius() => subject.inventory.innerContainer.OfType<ThingWithComps>()
+            .FirstOrDefault(t => t.def.defName == "MeleeWeapon_Gladius");
+
+        private static QualityCategory QualityOf(Thing t)
+        {
+            t.TryGetQuality(out QualityCategory q);
+            return q;
+        }
+
         private void TickMelee(int tick)
         {
+            LoadoutQualityMod.Settings.autoUpgrade = true; // no off-control here (lq1 covers it)
             if (phase == 0)
             {
-                LoadoutQualityMod.Settings.autoUpgrade = true;
-                phase = 1;
-                startTick = tick;
+                ThingWithComps g = InvGladius();
+                if (g != null && g.Stuff == ThingDefOf.Steel && QualityOf(g) == QualityCategory.Excellent)
+                {
+                    Check("melee-quality-upgrade-same-material", true,
+                        "steel Excellent gladius acquired over steel Normal (DPS folds quality, HP neutral)");
+                    // Stage the material winner: a plasteel Excellent gladius, full HP.
+                    var plasteel = (ThingWithComps)ThingMaker.MakeThing(
+                        ThingDef.Named("MeleeWeapon_Gladius"), ThingDefOf.Plasteel);
+                    plasteel.TryGetComp<CompQuality>()?.SetQuality(QualityCategory.Excellent, ArtGenerationContext.Colony);
+                    GenSpawn.Spawn(plasteel, CellFinder.RandomClosewalkCellNear(subject.Position, subject.Map, 4), subject.Map);
+                    phase = 1;
+                    startTick = tick;
+                    return;
+                }
+                Timeout("melee-quality-upgrade-same-material", tick,
+                    $"invGladius={g?.Stuff?.defName}:{(g != null ? QualityOf(g).ToString() : "none")} job={subject.CurJobDef?.defName}");
                 return;
             }
-            ThingWithComps invGladius = subject.inventory.innerContainer.OfType<ThingWithComps>()
-                .FirstOrDefault(t => t.def.defName == "MeleeWeapon_Gladius");
-            if (invGladius != null && invGladius.Stuff == ThingDefOf.Plasteel)
+            ThingWithComps gg = InvGladius();
+            if (gg != null && gg.Stuff == ThingDefOf.Plasteel)
             {
-                Check("melee-upgrades-across-material", true, "plasteel gladius in inventory (DPS beat steel)");
+                Check("melee-material-upgrade", true,
+                    "plasteel Excellent gladius acquired over steel Excellent (DPS folds material at equal quality)");
                 Thing droppedSteel = NearbyDropped(ThingDef.Named("MeleeWeapon_Gladius"),
-                    t => t.Stuff == ThingDefOf.Steel);
+                    t => t.Stuff == ThingDefOf.Steel && QualityOf(t) == QualityCategory.Excellent);
                 Check("old-dropped-unforbidden",
                     droppedSteel != null && !droppedSteel.IsForbidden(Faction.OfPlayer),
                     $"dropped={(droppedSteel != null)} forbidden={droppedSteel?.IsForbidden(Faction.OfPlayer)}");
                 Finish();
                 return;
             }
-            Timeout("melee-upgrades-across-material", tick,
-                $"invGladiusStuff={invGladius?.Stuff?.defName ?? "none"} job={subject.CurJobDef?.defName}");
+            Timeout("melee-material-upgrade", tick,
+                $"invGladius={gg?.Stuff?.defName ?? "none"} job={subject.CurJobDef?.defName}");
         }
 
         // LQ-3: HP-bucket tiebreak. Phase 0 (ON) — an excellent rifle at the SAME
