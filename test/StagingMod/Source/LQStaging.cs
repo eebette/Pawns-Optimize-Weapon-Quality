@@ -89,11 +89,13 @@ namespace LQTestStaging
             SaveAndReset("LQ-3-bucket");
             Stage4(map);
             SaveAndReset("LQ-4-floor");
+            Stage5(map);
+            SaveAndReset("LQ-5-meleeprime");
 
             Find.TickManager.Pause();
             Log.Message("[LQStaging] All LQ saves created.");
             Find.LetterStack.ReceiveLetter("LQ saves created",
-                "LQ-1-ranged, LQ-2-melee, LQ-3-bucket, LQ-4-floor written.", LetterDefOf.PositiveEvent);
+                "LQ-1..5 written.", LetterDefOf.PositiveEvent);
         }
 
         private void Stage1(Map map)
@@ -173,6 +175,26 @@ namespace LQTestStaging
             SpawnAmmoFor(map, rifle);
 
             GiveLoadout(pawn, "LQ floor test", rifle);
+        }
+
+        private void Stage5(Map map)
+        {
+            Pawn pawn = SpawnColonist(map, "MeleePrime", new IntVec3(0, 0, 8));
+            // Low melee skill so CE's damage-variation factor f = 0.75 + 0.025*skill is
+            // BELOW 1 — the condition under which the old (equipped-skewed) ranking made
+            // an identical ground copy out-measure the equipped weapon and ping-pong.
+            pawn.skills.GetSkill(SkillDefOf.Melee).Level = 4;
+            ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
+
+            // Melee weapon as the EQUIPPED PRIMARY (not a sidearm) — the only case CE's
+            // MeleeWeapon_AverageDPS skews. Steel Excellent equipped; an IDENTICAL steel
+            // Excellent on the ground, full HP, must NOT tempt a swap. The material
+            // winner (plasteel) is staged by the runner in phase 1.
+            ThingWithComps carried = MakeWithQuality(gladius, ThingDefOf.Steel, QualityCategory.Excellent);
+            pawn.equipment.AddEquipment(carried);
+            SpawnWithQuality(map, gladius, ThingDefOf.Steel, QualityCategory.Excellent, anchor + new IntVec3(8, 0, 8));
+
+            GiveLoadout(pawn, "LQ meleeprime test", gladius);
         }
 
         // ---- helpers -------------------------------------------------------
@@ -324,6 +346,7 @@ namespace LQTestStaging
         // bucket-scenario bookkeeping
         private int carriedBucketId;
         private int carriedBucketValue;
+        private int primeId; // meleeprime-scenario: the initially-equipped instance
 
         public LQTestRunnerComponent(Game game)
         {
@@ -365,6 +388,7 @@ namespace LQTestStaging
                 case "lq2": return "Melee";
                 case "lq3": return "Bucket";
                 case "lq4": return "Floor";
+                case "lq5": return "MeleePrime";
                 default: return "?";
             }
         }
@@ -400,6 +424,7 @@ namespace LQTestStaging
                 case "lq2": TickMelee(tick); break;
                 case "lq3": TickBucket(tick); break;
                 case "lq4": TickFloor(tick); break;
+                case "lq5": TickMeleePrime(tick); break;
             }
         }
 
@@ -581,6 +606,53 @@ namespace LQTestStaging
                 return;
             }
             Timeout("above-floor-swaps", tick, $"primary={Primary?.def?.defName}:{pq} job={subject.CurJobDef?.defName}");
+        }
+
+        // LQ-5: melee weapon as the EQUIPPED PRIMARY, melee skill 4 (f<1). Phase 0: an
+        // IDENTICAL steel Excellent ground copy must NOT be swapped to (the old
+        // equipped-skew ranking would swap and ping-pong). Phase 1: a plasteel Excellent
+        // copy (material upgrade) must win — proving equipped-primary melee still
+        // upgrades correctly.
+        private void TickMeleePrime(int tick)
+        {
+            LoadoutQualityMod.Settings.autoUpgrade = true;
+            ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
+            if (phase == 0)
+            {
+                if (primeId == 0 && subject.equipment?.Primary != null)
+                {
+                    primeId = subject.equipment.Primary.thingIDNumber;
+                }
+                ThingWithComps p = subject.equipment?.Primary;
+                if (p == null || p.thingIDNumber != primeId)
+                {
+                    Check("meleeprime-no-pingpong", false,
+                        $"swapped off the equipped weapon (id {p?.thingIDNumber} != {primeId}) — skew ping-pong");
+                    Finish();
+                    return;
+                }
+                if (tick - startTick > 1800)
+                {
+                    Check("meleeprime-no-pingpong", true,
+                        "steel Excellent primary held against an identical ground copy (no skew ping-pong)");
+                    var plasteel = (ThingWithComps)ThingMaker.MakeThing(gladius, ThingDefOf.Plasteel);
+                    plasteel.TryGetComp<CompQuality>()?.SetQuality(QualityCategory.Excellent, ArtGenerationContext.Colony);
+                    GenSpawn.Spawn(plasteel, CellFinder.RandomClosewalkCellNear(subject.Position, subject.Map, 4), subject.Map);
+                    phase = 1;
+                    startTick = tick;
+                }
+                return;
+            }
+            ThingWithComps pp = subject.equipment?.Primary;
+            if (pp != null && pp.def == gladius && pp.Stuff == ThingDefOf.Plasteel)
+            {
+                Check("meleeprime-material-upgrade", true,
+                    "plasteel Excellent equipped as primary (material upgrade, no skew)");
+                Finish();
+                return;
+            }
+            Timeout("meleeprime-material-upgrade", tick,
+                $"primary={pp?.Stuff?.defName} job={subject.CurJobDef?.defName}");
         }
 
         private ThingWithComps MakeExcellent(ThingDef def)

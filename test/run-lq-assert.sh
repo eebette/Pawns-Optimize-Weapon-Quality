@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: ./test/run-lq-assert.sh lq1 LQ-1-ranged
 set -euo pipefail
-SCENARIO="${1:?scenario (lq1|lq2|lq3|lq4)}"
+SCENARIO="${1:?scenario (lq1|lq2|lq3|lq4|lq5)}"
 SAVE="${2:?save name}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RIMWORLD="$HOME/.local/share/Steam/steamapps/common/RimWorld/RimWorldLinux"

@@ -151,9 +151,9 @@ namespace LoadoutQuality
         /// <summary>Strict-better on the class key, hit-point bucket as tiebreak.
         /// Strictness in both directions guarantees termination: once the pawn holds
         /// the winner, no equal-or-worse copy can win it back, so the swap never
-        /// ping-pongs. Ranged ties on quality then on HP bucket; melee ties on
-        /// MeleeWeapon_AverageDPS (which folds material AND quality) then on HP
-        /// bucket.</summary>
+        /// ping-pongs. Ranged ties on quality then on HP bucket; melee ties on adjusted
+        /// melee damage (folds material AND quality, wielder-independent — see MeleeDps)
+        /// then on HP bucket.</summary>
         private static bool Beats(Thing candidate, Thing incumbent, bool ranged)
         {
             if (ranged)
@@ -177,23 +177,39 @@ namespace LoadoutQuality
             return HpBucket(candidate) > HpBucket(incumbent);
         }
 
-        /// <summary>Melee DPS via the weapon INSTANCE. Under Combat Extended (our hard
-        /// dependency) MeleeWeapon_AverageDPS is served by CE's own StatWorker, which
-        /// reads quality and material off the passed Thing — so the instance path folds
-        /// both in and ranks materials correctly. An ABSTRACT request (no Thing) would
-        /// instead hit CE's ownerEquipment-null branch and collapse to the tool's raw
-        /// power — a per-def constant, blind to quality and material — so it must NOT be
-        /// used here. The stat is called, never recomputed.
+        /// <summary>Melee ranking key: the weapon's per-tool adjusted melee damage,
+        /// summed. CE's MeleeWeapon_AverageDPS stat is quality+material-correct, but its
+        /// worker multiplies an EQUIPPED weapon by the wielder's melee-skill damage
+        /// variation (f = 0.75 + 0.025·skill; ground copies and inventory sidearms get
+        /// 1.0) — so an equipped-primary melee incumbent was measured on a different
+        /// basis than ground candidates, and below skill 10 (f &lt; 1) an equal-or-worse
+        /// copy out-measured it, causing a downgrade and a self-seeding ping-pong.
+        /// CE's GetAdjustedDamage folds quality AND material with NO wielder term, so it
+        /// gives every copy — equipped or not — the SAME basis. We only ever compare
+        /// copies of ONE weapon def (identical tools and cooldowns), and quality+material
+        /// scale a def's tools by uniform factors, so the summed adjusted damage ranks
+        /// the copies exactly as DPS would. This CALLS CE's own damage function; it does
+        /// NOT reproduce CE's DPS formula (no cooldown division, variation, or weighting).
         ///
-        /// Residual, accepted: CE scales an EQUIPPED-PRIMARY weapon's value by the
-        /// wielder's melee-skill damage variation (ground candidates and inventory
-        /// sidearms are unaffected), so ranking a pawn's equipped-primary MELEE weapon
-        /// carries a small skill-based skew. Normalising it out would mean reproducing
-        /// CE's variation formula (a mirror); the case is narrow (melee as the main
-        /// weapon, not a sidearm) and documented rather than mirrored.</summary>
+        /// Narrow accepted edge: a weapon mixing sharp AND blunt tools with different
+        /// cooldowns could rank slightly off (the sum is not cooldown-weighted, and
+        /// weighting it would reproduce CE's formula). No vanilla melee weapon mixes
+        /// damage types, so this is a modded-only, documented limitation.</summary>
         private static float MeleeDps(Thing t)
         {
-            return t.GetStatValue(StatDefOf.MeleeWeapon_AverageDPS);
+            float sum = 0f;
+            List<Tool> tools = t.def.tools;
+            if (tools != null)
+            {
+                foreach (Tool tool in tools)
+                {
+                    if (tool is ToolCE ce)
+                    {
+                        sum += StatWorker_MeleeDamageBase.GetAdjustedDamage(ce, t);
+                    }
+                }
+            }
+            return sum;
         }
 
         private static QualityCategory QualityOf(Thing t)
