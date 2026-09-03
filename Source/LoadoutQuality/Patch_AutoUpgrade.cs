@@ -25,10 +25,11 @@ namespace LoadoutQuality
     ///     stuff, so quality is the whole ordering; a modded stuffable gun is held to
     ///     its own material (there is no callable ranged-DPS to rank guns across
     ///     materials without reproducing CE's formula — which we will not do).
-    ///   - melee: highest MeleeWeapon_AverageDPS, then hit-point bucket. That is
-    ///     vanilla's own stat and it already folds material AND quality, so a plasteel
-    ///     copy rightly beats a higher-quality steel one. We CALL the stat; we do not
-    ///     recompute it.
+    ///   - melee: highest summed adjusted damage, then hit-point bucket — CE's own
+    ///     GetAdjustedDamage folds material AND quality with no wielder term, so a
+    ///     plasteel copy rightly beats a higher-quality steel one (see MeleeDps for why
+    ///     the DPS stat itself can't be used). We CALL CE's damage; we do not recompute
+    ///     its DPS formula.
     /// A global quality floor (settings) gates every candidate regardless of class.
     ///
     /// Selection is global-max, not nearest-better: the pawn reroutes at most once,
@@ -191,10 +192,18 @@ namespace LoadoutQuality
         /// the copies exactly as DPS would. This CALLS CE's own damage function; it does
         /// NOT reproduce CE's DPS formula (no cooldown division, variation, or weighting).
         ///
-        /// Narrow accepted edge: a weapon mixing sharp AND blunt tools with different
-        /// cooldowns could rank slightly off (the sum is not cooldown-weighted, and
-        /// weighting it would reproduce CE's formula). No vanilla melee weapon mixes
-        /// damage types, so this is a modded-only, documented limitation.</summary>
+        /// Narrow accepted edge: for a weapon whose tools mix sharp AND blunt damage,
+        /// the material factor is NOT uniform across tools (sharp and blunt take
+        /// different stuff multipliers), so an unweighted sum can rank a same-quality
+        /// pair by a sub-percent margin differently than cooldown-weighted DPS would.
+        /// Most Core melee weapons DO mix types (Poke/handle tools are blunt), but no
+        /// vanilla weapon+material combination actually reorders under this key
+        /// (verified by brute force: no vanilla material offers the blunt-up/sharp-down
+        /// tradeoff a flip needs, and CE's per-tool cooldowns are near-uniform). The
+        /// real exposure is a modded weapon or stuff of a more extreme profile — and
+        /// even then it is a sub-percent misorder of two same-quality copies that
+        /// cannot ping-pong or crash. Cooldown-weighting the sum would reproduce CE's
+        /// DPS formula, so this stays documented, not mirrored.</summary>
         private static float MeleeDps(Thing t)
         {
             float sum = 0f;

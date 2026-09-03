@@ -10,9 +10,10 @@ that's the "works with CE alone" claim):
 ./test/run-lq-assert.sh lq2 LQ-2-melee
 ./test/run-lq-assert.sh lq3 LQ-3-bucket
 ./test/run-lq-assert.sh lq4 LQ-4-floor
+./test/run-lq-assert.sh lq5 LQ-5-meleeprime
 ```
 
-Results: `test/SaveData/test-results-lq*.json`. Green (10/10 checks) recorded
+Results: `test/SaveData/test-results-lq*.json`. Green (12/12 checks) recorded
 2026-09-03:
 
 - **lq1 (ranged)** — equipped-weapon path. Phase 0 (toggle OFF): a Normal rifle is
@@ -34,6 +35,12 @@ Results: `test/SaveData/test-results-lq*.json`. Green (10/10 checks) recorded
 - **lq4 (min-quality floor)** — floor raised to Good, carried Awful rifle. Phase 0: a
   Poor rifle (better than Awful, below the floor) is REFUSED, Awful retained. Phase 1:
   an Excellent rifle (above the floor) is acquired.
+- **lq5 (melee EQUIPPED-PRIMARY, skill 4)** — the only case CE's melee-DPS stat skews.
+  A steel Excellent gladius equipped as primary; melee skill 4 (so CE's variation
+  factor f<1). Phase 0: an IDENTICAL steel Excellent ground copy must NOT be swapped to
+  (the old equipped-skewed ranking made it out-measure the equipped weapon → downgrade
+  + ping-pong; fingerprinted by instance id). Phase 1: a plasteel Excellent copy
+  (material) must win — proving equipped-primary melee still upgrades correctly.
 
 ## Adversarial round 1 (2026-09-03) — 3 attackers, 3 fixes
 
@@ -83,6 +90,34 @@ the equipped despawn-before-add orphan on an exotic throwing `Notify_Equipped`; 
 two lossy DoSwap edges under pathological placement; the sideline cooldown; the
 CanEquip/quest-lock gates (no SS/biocode content in the CE-only profile); the SS
 same-pair fix (no SS in the profile). All verified against decompiles.
+
+## Confirmation round 3 (2026-09-03) — 2 attackers, 1 fix (the melee key)
+
+Confirmed round 2's five fixes: the gates (CanEquip, quest-lock, inventory-abort,
+cache-clear) and the SS same-pair short-circuit all CLEAN (CanEquip allows
+self-bonded and rejects only genuinely-unequippable weapons; quest-lock only ever
+fires for lodgers; the inventory-abort is loss-safe; cache-clear fires only at game
+load). BUT both attackers flagged that round-2's melee revert to the instance path
+had re-opened a termination hole under-rated in the ledger as a "small residual":
+
+- **[HIGH] Equipped-primary melee ping-pong / downgrade below melee skill 10.** CE's
+  worker multiplies an EQUIPPED weapon's DPS by f = 0.75 + 0.025·skill (ground copies
+  and inventory sidearms get 1.0). For skill < 10 (f < 1) the equipped weapon is
+  under-valued, so an equal-or-worse ground copy out-measures it — even an IDENTICAL
+  one (D > f·D). The pawn downgrades, drops the loser unforbidden at its feet, and
+  swaps back next tick; self-seeded by the mod's own upgrades, and the sideline can't
+  catch it (each swap succeeds). Fix: rank melee by CE's
+  `StatWorker_MeleeDamageBase.GetAdjustedDamage(tool, thing)` summed over the def's
+  tools — it folds quality AND material with NO wielder term, so equipped and ground
+  copies share one basis. A call to CE's damage, not a reproduction of its DPS formula
+  (`MeleeWeapon_DamageMultiplier` was ruled out — it folds quality only). Documented
+  edge: for a weapon whose tools mix sharp+blunt damage the material factor isn't
+  uniform across tools, so an unweighted sum can misorder a same-quality pair by a
+  sub-percent margin. Most Core melee weapons DO mix types (Poke/handle are blunt), but
+  no vanilla weapon+material combination actually reorders under this key (brute-force
+  verified — no vanilla material offers the blunt-up/sharp-down tradeoff a flip needs);
+  the real exposure is a modded weapon/stuff of extreme profile, and even then it can't
+  ping-pong or crash. lq5 pins the fix.
 
 ## Harness findings (kept from prior rounds)
 
