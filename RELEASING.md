@@ -20,6 +20,15 @@ by reflection at runtime; neither is referenced or vendored.
    to `Media/` and embed in the README.
 6. Tag `v1.0.0`; upload from the in-game Mods menu.
 
+## Publishing (clean upload)
+
+RimWorld's uploader ships the WHOLE mod folder (no `.rwignore`; `SetItemContent`
+runs over the mod dir), so never upload the repo - it carries `Source/`, `test/`,
+`docs/`, `Media/`, etc. Run `./publish.sh` to stage an allowlisted clean copy (About
++ Assemblies + Defs/Patches/Languages as applicable + LICENSE/NOTICE) into a sibling
+`.publish/`, and upload that folder. After the first publish, copy the generated
+`About/PublishedFileId.txt` back into the repo.
+
 ## Versioning & save compatibility
 
 Semver. No per-save footprint - the mod scribes nothing (settings live in mod settings; the
