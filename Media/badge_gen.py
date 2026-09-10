@@ -155,15 +155,13 @@ def render_preview(rifle):
         while s > 10 and max(d.textlength(t, font=ImageFont.truetype(FONT, s)) for t in texts) > max_w:
             s -= 1
         return ImageFont.truetype(FONT, s)
-    prow1 = "PAWNS OPTIMIZE"
-    prow2a, prow2b = "WEAPON ", "QUALITY"
-    prow2 = prow2a + prow2b
+    prow1, prow2 = "PAWNS OPTIMIZE", "WEAPON QUALITY"
     ftitle = fitp([prow1, prow2], 42 * P, 470 * P)
     plh = sum(ftitle.getmetrics())
     ytop = 367 * P
-    ptarget = max(d.textlength(prow1, font=ftitle), d.textlength(prow2, font=ftitle))
-    draw_row(d, prow1, ftitle, W / 2, ytop, ptarget, WHITE)
-    draw_row(d, prow2, ftitle, W / 2, ytop + plh, ptarget, GOLD)
+    for text, y, color in [(prow1, ytop, WHITE), (prow2, ytop + plh, GOLD)]:
+        w = d.textlength(text, font=ftitle)
+        d.text(((W - w) / 2, y), text, font=ftitle, fill=color)
     img.resize((512, 512), Image.LANCZOS).save(os.path.join(HERE, "..", "About", "Preview.png"))
     print("wrote About/Preview.png")
 
