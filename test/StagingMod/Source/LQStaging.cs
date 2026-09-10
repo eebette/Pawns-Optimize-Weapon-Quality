@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using CombatExtended;
-using LoadoutQuality;
+using PawnsOptimizeWeaponQuality;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -18,7 +18,7 @@ namespace LQTestStaging
     ///    an EXCELLENT rifle on the ground. Ranged upgrade path + off-control + the
     ///    dropped-unforbidden contract.
     ///  LQ-2-melee: "Melee" holds a STEEL NORMAL gladius, loadout {gladius}; a
-    ///    PLASTEEL EXCELLENT gladius on the ground — a DIFFERENT material, which the
+    ///    PLASTEEL EXCELLENT gladius on the ground - a DIFFERENT material, which the
     ///    old same-stuff rule would have ignored. Melee ranks by MeleeWeapon_AverageDPS
     ///    (folds material), so the plasteel copy must win.
     ///  LQ-3-bucket: "Bucket" holds an EXCELLENT rifle damaged to a low HP bucket;
@@ -26,7 +26,7 @@ namespace LQTestStaging
     ///    full-HP EXCELLENT rifle (higher bucket, must win). Pins the tiebreak both
     ///    ways.
     ///  LQ-4-floor: "Floor" holds an AWFUL rifle with the floor raised to Good; a
-    ///    POOR rifle on the ground (better than Awful, below the floor — must be
+    ///    POOR rifle on the ground (better than Awful, below the floor - must be
     ///    refused), then an EXCELLENT rifle (above the floor, must win). Pins the
     ///    acquisition floor both ways.
     /// </summary>
@@ -119,7 +119,7 @@ namespace LQTestStaging
             ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
 
             // Rifle occupies the primary slot so the gladius stays an INVENTORY
-            // sidearm — this exercises the inventory swap branch (lq1 covers the
+            // sidearm - this exercises the inventory swap branch (lq1 covers the
             // equipped branch). No better rifle is staged, so the rifle slot is inert.
             ThingWithComps carriedRifle = MakeWithQuality(rifle, null, QualityCategory.Normal);
             pawn.equipment.AddEquipment(carriedRifle);
@@ -152,7 +152,7 @@ namespace LQTestStaging
             LoadMag(pawn, carried);
 
             ThingWithComps sameBucket = MakeWithQuality(rifle, null, QualityCategory.Excellent);
-            sameBucket.HitPoints = carried.HitPoints; // identical bucket — must not tempt a swap
+            sameBucket.HitPoints = carried.HitPoints; // identical bucket - must not tempt a swap
             GenSpawn.Spawn(sameBucket, FindCell(map, anchor + new IntVec3(6, 0, 3)), map);
             staged.Add(sameBucket);
             SpawnAmmoFor(map, rifle);
@@ -169,7 +169,7 @@ namespace LQTestStaging
             pawn.equipment.AddEquipment(carried);
             LoadMag(pawn, carried);
             // Poor is better than the carried Awful but below the Good floor the
-            // runner sets — must be refused. The Excellent winner is staged in
+            // runner sets - must be refused. The Excellent winner is staged in
             // phase 1.
             SpawnWithQuality(map, rifle, null, QualityCategory.Poor, anchor + new IntVec3(6, 0, -3));
             SpawnAmmoFor(map, rifle);
@@ -181,12 +181,12 @@ namespace LQTestStaging
         {
             Pawn pawn = SpawnColonist(map, "MeleePrime", new IntVec3(0, 0, 8));
             // Low melee skill so CE's damage-variation factor f = 0.75 + 0.025*skill is
-            // BELOW 1 — the condition under which the old (equipped-skewed) ranking made
+            // BELOW 1 - the condition under which the old (equipped-skewed) ranking made
             // an identical ground copy out-measure the equipped weapon and ping-pong.
             pawn.skills.GetSkill(SkillDefOf.Melee).Level = 4;
             ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
 
-            // Melee weapon as the EQUIPPED PRIMARY (not a sidearm) — the only case CE's
+            // Melee weapon as the EQUIPPED PRIMARY (not a sidearm) - the only case CE's
             // MeleeWeapon_AverageDPS skews. Steel Excellent equipped; an IDENTICAL steel
             // Excellent on the ground, full HP, must NOT tempt a swap. The material
             // winner (plasteel) is staged by the runner in phase 1.
@@ -317,10 +317,10 @@ namespace LQTestStaging
             {
                 return;
             }
-            // Kill the default-ON upgrade BEFORE any save can load and tick — the
+            // Kill the default-ON upgrade BEFORE any save can load and tick - the
             // LoadedGame-callback reset loses a race against the think tree on a save
             // that loads unpaused (each scenario re-enables explicitly).
-            LoadoutQualityMod.Settings.autoUpgrade = false;
+            PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = false;
             if (GenCommandLine.TryGetCommandLineArg("celoadsave", out string save) && !save.NullOrEmpty())
             {
                 LongEventHandler.ExecuteWhenFinished(() =>
@@ -370,9 +370,9 @@ namespace LQTestStaging
                     Finish();
                     return;
                 }
-                LoadoutQualityMod.Settings.autoUpgrade = false; // each scenario opts in explicitly
-                LoadoutQualityMod.Settings.minQuality = QualityCategory.Poor;
-                LoadoutQualityMod.Settings.hpBucket = 10;
+                PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = false; // each scenario opts in explicitly
+                PawnsOptimizeWeaponQualityMod.Settings.minQuality = QualityCategory.Poor;
+                PawnsOptimizeWeaponQualityMod.Settings.hpBucket = 10;
                 active = true;
                 startTick = Find.TickManager.TicksGame;
                 Find.TickManager.CurTimeSpeed = TimeSpeed.Superfast;
@@ -430,8 +430,8 @@ namespace LQTestStaging
 
         private ThingWithComps Primary => subject.equipment?.Primary;
 
-        // LQ-1: phase 0 (toggle OFF) — normal rifle retained 1800 ticks; phase 1
-        // (ON) — swaps to the excellent rifle, the normal one dropped unforbidden.
+        // LQ-1: phase 0 (toggle OFF) - normal rifle retained 1800 ticks; phase 1
+        // (ON) - swaps to the excellent rifle, the normal one dropped unforbidden.
         private void TickRanged(int tick)
         {
             ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
@@ -447,7 +447,7 @@ namespace LQTestStaging
                 if (tick - startTick > 1800)
                 {
                     Check("off-no-upgrade", true, "normal rifle retained for 1800 ticks");
-                    LoadoutQualityMod.Settings.autoUpgrade = true;
+                    PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = true;
                     phase = 1;
                     startTick = tick;
                 }
@@ -484,7 +484,7 @@ namespace LQTestStaging
 
         private void TickMelee(int tick)
         {
-            LoadoutQualityMod.Settings.autoUpgrade = true; // no off-control here (lq1 covers it)
+            PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = true; // no off-control here (lq1 covers it)
             if (phase == 0)
             {
                 ThingWithComps g = InvGladius();
@@ -522,18 +522,18 @@ namespace LQTestStaging
                 $"invGladius={gg?.Stuff?.defName ?? "none"} job={subject.CurJobDef?.defName}");
         }
 
-        // LQ-3: HP-bucket tiebreak. Phase 0 (ON) — an excellent rifle at the SAME
-        // bucket as carried must NOT tempt a swap for 1800 ticks. Phase 1 — a
+        // LQ-3: HP-bucket tiebreak. Phase 0 (ON) - an excellent rifle at the SAME
+        // bucket as carried must NOT tempt a swap for 1800 ticks. Phase 1 - a
         // full-HP excellent rifle (higher bucket) must win.
         private void TickBucket(int tick)
         {
             ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
-            int bucketSize = LoadoutQualityMod.Settings.hpBucket;
+            int bucketSize = PawnsOptimizeWeaponQualityMod.Settings.hpBucket;
             if (phase == 0)
             {
                 if (carriedBucketId == 0)
                 {
-                    LoadoutQualityMod.Settings.autoUpgrade = true;
+                    PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = true;
                     carriedBucketId = Primary.thingIDNumber;
                     carriedBucketValue = Primary.HitPoints / bucketSize;
                 }
@@ -568,18 +568,18 @@ namespace LQTestStaging
                 $"primaryHp={Primary?.HitPoints} bucket={(Primary != null ? Primary.HitPoints / bucketSize : -1)} job={subject.CurJobDef?.defName}");
         }
 
-        // LQ-4: acquisition floor. Phase 0 (ON, floor Good) — a Poor rifle (better
-        // than the carried Awful, below the floor) must be refused. Phase 1 — an
+        // LQ-4: acquisition floor. Phase 0 (ON, floor Good) - a Poor rifle (better
+        // than the carried Awful, below the floor) must be refused. Phase 1 - an
         // Excellent rifle (above the floor) must win.
         private void TickFloor(int tick)
         {
             ThingDef rifle = ThingDef.Named("Gun_BoltActionRifle");
             if (phase == 0)
             {
-                if (tick == startTick + 30 || !LoadoutQualityMod.Settings.autoUpgrade)
+                if (tick == startTick + 30 || !PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade)
                 {
-                    LoadoutQualityMod.Settings.autoUpgrade = true;
-                    LoadoutQualityMod.Settings.minQuality = QualityCategory.Good;
+                    PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = true;
+                    PawnsOptimizeWeaponQualityMod.Settings.minQuality = QualityCategory.Good;
                 }
                 Primary.TryGetQuality(out QualityCategory q);
                 if (q != QualityCategory.Awful)
@@ -611,11 +611,11 @@ namespace LQTestStaging
         // LQ-5: melee weapon as the EQUIPPED PRIMARY, melee skill 4 (f<1). Phase 0: an
         // IDENTICAL steel Excellent ground copy must NOT be swapped to (the old
         // equipped-skew ranking would swap and ping-pong). Phase 1: a plasteel Excellent
-        // copy (material upgrade) must win — proving equipped-primary melee still
+        // copy (material upgrade) must win - proving equipped-primary melee still
         // upgrades correctly.
         private void TickMeleePrime(int tick)
         {
-            LoadoutQualityMod.Settings.autoUpgrade = true;
+            PawnsOptimizeWeaponQualityMod.Settings.autoUpgrade = true;
             ThingDef gladius = ThingDef.Named("MeleeWeapon_Gladius");
             if (phase == 0)
             {
@@ -627,7 +627,7 @@ namespace LQTestStaging
                 if (p == null || p.thingIDNumber != primeId)
                 {
                     Check("meleeprime-no-pingpong", false,
-                        $"swapped off the equipped weapon (id {p?.thingIDNumber} != {primeId}) — skew ping-pong");
+                        $"swapped off the equipped weapon (id {p?.thingIDNumber} != {primeId}) - skew ping-pong");
                     Finish();
                     return;
                 }
@@ -662,7 +662,7 @@ namespace LQTestStaging
             return thing;
         }
 
-        // Pawn-adjacent instance ONLY — quicktest maps scatter their own random
+        // Pawn-adjacent instance ONLY - quicktest maps scatter their own random
         // weapons, and a map-wide search once sampled a pre-existing forbidden weapon
         // from across the map (id mismatch caught by fingerprinting).
         private Thing NearbyDropped(ThingDef def, Predicate<Thing> match)

@@ -5,7 +5,7 @@ SCENARIO="${1:?scenario (lq1|lq2|lq3|lq4|lq5)}"
 SAVE="${2:?save name}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RIMWORLD="$HOME/.local/share/Steam/steamapps/common/RimWorld/RimWorldLinux"
-# GS_WRAP: launch inside gamescope's nested compositor — immune to the desktop's
+# GS_WRAP: launch inside gamescope's nested compositor - immune to the desktop's
 # display state (owner gaming via Proton, mode-list churn, XF86VidMode crashes).
 GS=(gamescope -W 1600 -H 900 --)
 SAVEDATA="$REPO/test/SaveData"
@@ -15,7 +15,7 @@ for f in ModsConfig.xml Prefs.xml; do
 done
 RESULT="$SAVEDATA/test-results-$SCENARIO.json"
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
-    dotnet build "$REPO/Source/LoadoutQuality/LoadoutQuality.csproj" -c Release
+    dotnet build "$REPO/Source/PawnsOptimizeWeaponQuality/PawnsOptimizeWeaponQuality.csproj" -c Release
     dotnet build "$REPO/test/StagingMod/Source/LQTestStaging.csproj" -c Release
 fi
 rm -f "$RESULT"

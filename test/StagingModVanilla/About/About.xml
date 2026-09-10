@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+    <name>LQ Vanilla Test Staging (dev only)</name>
+    <author>eebette</author>
+    <packageId>eebette.lqteststaging.vanilla</packageId>
+    <supportedVersions>
+        <li>1.6</li>
+    </supportedVersions>
+    <description>Dev-only: single-phase vanilla-profile (no Combat Extended) test for Pawns Optimize Weapon Quality. Arranges a colonist with a Normal equipped rifle and inventory gladius plus Excellent copies on the ground, then asserts the no-CE upgrade path swaps both. Inert without -lqvtest.</description>
+</ModMetaData>

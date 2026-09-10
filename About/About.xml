@@ -1,30 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-    <name>Loadout Quality for Combat Extended</name>
+    <name>Pawns Optimize Weapon Quality</name>
     <author>eebette</author>
-    <packageId>eebette.CELoadoutQuality</packageId>
+    <packageId>eebette.PawnsOptimizeWeaponQuality</packageId>
     <supportedVersions>
         <li>1.6</li>
     </supportedVersions>
-    <description>Quality control for Combat Extended loadouts — no extra interface, just a settings page.
+    <description>[img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_POWQ.png[/img]
 
-When a pawn is idle, it fetches the best available copy of each weapon its loadout calls for:
-- Guns: the highest-quality copy on the map, hit points breaking ties.
-- Melee weapons: the highest melee DPS — which folds in the material, so a plasteel copy rightly beats a higher-quality steel one — hit points breaking ties.
+RimWorld mod that changes pawn behavior to automatically swap weapons to a higher-quality version when available. Idle pawns periodically scan the map for higher-quality (or higher-hit-point) copies of the weapons they hold, and fetch one when it is available.
 
-Set the minimum quality worth acquiring and the hit-point tiebreak granularity in the mod settings. The replaced weapon is dropped in place, unforbidden, for your haulers.
+[h1]What it does[/h1]
+[list]
+[*]An idle pawn swaps a held weapon for a better copy of the same weapon lying on the map - equipped primary and carried sidearms alike.
+[*]Guns rank by quality; melee weapons by damage, which folds in the material; hit points break ties.
+[*]The replaced weapon is dropped in place, unforbidden, for your haulers.
+[*]Set the minimum quality worth acquiring and the hit-point tiebreak granularity in the mod settings.
+[/list]
 
-Requires Combat Extended. Works fine alongside Simple Sidearms and the CE+SS compatibility suite, but needs neither.</description>
+[h1]Combat Extended optional[/h1]
+With Combat Extended loaded, upgrades follow each pawn's CE loadout and rank on CE's own damage numbers. Without it, they follow the weapons the pawn is holding and vanilla stats. Works fine alongside Simple Sidearms too, but needs neither.
+
+[h1]Load order[/h1]
+Harmony, then this mod. Load after Combat Extended if you use it.
+
+[h1]My other mods[/h1]
+[b]The Combat Extended + Simple Sidearms suite[/b] - mods that make Combat Extended and Simple Sidearms run smoothly together.
+[table]
+[tr][th]Mod[/th][th]What it does[/th][/tr]
+[tr][td][url=https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch][img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_Patch.png[/img][/url][/td][td]Core compatibility patch for Combat Extended and Simple Sidearms.[/td][/tr]
+[tr][td][url=https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Loadouts][img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_Loadouts.png[/img][/url][/td][td]Synchronizes CE Loadouts with SS memory/gizmo.[/td][/tr]
+[tr][td][url=https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Tactics][img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_Tactics.png[/img][/url][/td][td]Sensible tweaks to nonsense pawn behavior when CE + SS run together.[/td][/tr]
+[/table]
+
+[b]Standalone[/b] - none of these need the patch, or each other.
+[table]
+[tr][th]Mod[/th][th]What it does[/th][/tr]
+[tr][td][url=https://github.com/eebette/Better-Attack-Orders-for-Simple-Sidearms][img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_BAO.png[/img][/url][/td][td]Adds sidearm attack orders to the right-click target menu.[/td][/tr]
+[tr][td][url=https://github.com/eebette/Universal-Patch-for-More-Materials][img]https://raw.githubusercontent.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch/main/Media/Badge_UPMM.png[/img][/url][/td][td]Adds materials from [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3055040889]More Materials[/url] to non-vanilla recipes.[/td][/tr]
+[/table]
+
+[h1]FAQ[/h1]
+[b]CE compatible?[/b]
+Yup! And it works fine without CE, too.
+
+[b]Can I add or remove it mid-save?[/b]
+Yep.
+
+[b]Does it change balance?[/b]
+It makes the game easier by automating weapon-quality management.
+
+[b]AI?[/b]
+This mod was engineered with the help of an AI Coding Assistant (Claude Code, Fable 5, Max effort). The amount of researching and deep-diving the compatibility interfaces of the mods it patches would have been insurmountable without it.
+
+Development followed a standard process driven and scrutinized by me (the real human person writing this): explore, design, build, test, fix, review, scrutinize, test again over many rounds.
+
+I have manually reviewed and verified all code in this mod.
+
+I ask that if you have unconstructive feedback regarding the usage of AI while developing this mod, that it remains outside of this community space. Thank you.</description>
     <modDependencies>
         <li>
             <packageId>brrainz.harmony</packageId>
             <displayName>Harmony</displayName>
             <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
-        </li>
-        <li>
-            <packageId>CETeam.CombatExtended</packageId>
-            <displayName>Combat Extended</displayName>
-            <steamWorkshopUrl>steam://url/CommunityFilePage/2890901044</steamWorkshopUrl>
         </li>
     </modDependencies>
     <loadAfter>

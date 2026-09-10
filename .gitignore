@@ -2,3 +2,4 @@ obj/
 *.user
 .idea/
 test/SaveData/
+test/SaveDataVanilla/

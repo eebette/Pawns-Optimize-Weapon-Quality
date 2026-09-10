@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """LQ badge + Workshop preview. Same geometry system as the CE+SS suite badges
-(300x100 bar/circle/ring-knockout; 512 preview) — visually consistent, distinct
+(300x100 bar/circle/ring-knockout; 512 preview) - visually consistent, distinct
 identity: masterwork-teal accent (quality), emblem = CE's rifle glyph (this is a CE
 mod; glyph remixed from CE's Badge_CE_compatible.svg, CC BY-NC-SA, CE team)
 crowned with a quality star. Run from Media/: python3 badge_gen.py"""
@@ -14,7 +14,7 @@ FONT = "/usr/share/fonts/dejavu-sans-fonts/DejaVuSansCondensed-Bold.ttf"
 S = 4
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
-GOLD = (0, 168, 156, 255)  # masterwork teal — amber/gold collided with the Loadouts Module badge
+GOLD = (0, 168, 156, 255)  # masterwork teal - amber/gold collided with the Loadouts Module badge
 
 
 def extract_rifle():
@@ -86,6 +86,16 @@ def emblem(img, d, cx_units, rifle, scale):
     star(d, cx_units[0], cx_units[1] - 26 * scale, 14 * scale, GOLD)
 
 
+def draw_row(d, text, font, cx, y, target_w, fill):
+    """Draw text tracked (letter-spaced) to span target_w, centered on cx."""
+    natural = d.textlength(text, font=font)
+    gap = (target_w - natural) / (len(text) - 1) if len(text) > 1 else 0
+    x = cx - target_w / 2
+    for ch in text:
+        d.text((x, y), ch, font=font, fill=fill)
+        x += d.textlength(ch, font=font) + gap
+
+
 def render_badge(rifle):
     W, H = 300 * S, 100 * S
     bar = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -105,21 +115,23 @@ def render_badge(rifle):
     d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=GOLD, width=3 * S)
     emblem(img, d, (cx, cy), rifle, S)
 
-    f1 = ImageFont.truetype(FONT, 15 * S)
-    f2 = ImageFont.truetype(FONT, 10 * S)
+    def fit_rows(texts, max_size, max_w):
+        s = int(max_size)
+        while s > 6 and max(d.textlength(t, font=ImageFont.truetype(FONT, s)) for t in texts) > max_w:
+            s -= 1
+        return ImageFont.truetype(FONT, s)
     CX = 202 * S
-    t1 = "LOADOUT QUALITY"
-    w1 = d.textlength(t1, font=f1)
-    d.text((CX - w1 / 2, 32 * S), t1, font=f1, fill=WHITE)
-    t2 = "for COMBAT EXTENDED"
-    K = 1.6 * S
-    w2 = sum(d.textlength(c, font=f2) + K for c in t2) - K
-    x = CX - w2 / 2
-    for ch in t2:
-        d.text((x, 55 * S), ch, font=f2, fill=GOLD)
-        x += d.textlength(ch, font=f2) + K
-    img.resize((300, 100), Image.LANCZOS).save(os.path.join(HERE, "Badge_LQ.png"))
-    print("wrote Badge_LQ.png")
+    row1 = "PAWNS OPTIMIZE"
+    row2a, row2b = "WEAPON ", "QUALITY"
+    row2 = row2a + row2b
+    tf = fit_rows([row1, row2], 15 * S, 190 * S)
+    lh = sum(tf.getmetrics())
+    y0 = 50 * S - lh  # two equal rows straddling the bar mid (~50*S)
+    target = max(d.textlength(row1, font=tf), d.textlength(row2, font=tf))
+    draw_row(d, row1, tf, CX, y0, target, WHITE)
+    draw_row(d, row2, tf, CX, y0 + lh, target, GOLD)
+    img.resize((300, 100), Image.LANCZOS).save(os.path.join(HERE, "Badge_POWQ.png"))
+    print("wrote Badge_POWQ.png")
 
 
 def render_preview(rifle):
@@ -138,16 +150,20 @@ def render_preview(rifle):
     paste_glyph(rifle, cx, (190 + 25) * P, 176 * P)
     star(d, cx, (190 - 75) * P, 40 * P, GOLD)
 
-    f1 = ImageFont.truetype(FONT, 36 * P)
-    f2 = ImageFont.truetype(FONT, 30 * P)
-    f3 = ImageFont.truetype(FONT, 20 * P)
-    for text, font, y, color in [
-        ("LOADOUT QUALITY", f1, 362 * P, WHITE),
-        ("for COMBAT EXTENDED", f2, 406 * P, WHITE),
-        ("YOUR PAWNS DESERVE BETTER GUNS", f3, 456 * P, GOLD),
-    ]:
-        w = d.textlength(text, font=font)
-        d.text(((W - w) / 2, y), text, font=font, fill=color)
+    def fitp(texts, max_size, max_w):
+        s = int(max_size)
+        while s > 10 and max(d.textlength(t, font=ImageFont.truetype(FONT, s)) for t in texts) > max_w:
+            s -= 1
+        return ImageFont.truetype(FONT, s)
+    prow1 = "PAWNS OPTIMIZE"
+    prow2a, prow2b = "WEAPON ", "QUALITY"
+    prow2 = prow2a + prow2b
+    ftitle = fitp([prow1, prow2], 42 * P, 470 * P)
+    plh = sum(ftitle.getmetrics())
+    ytop = 367 * P
+    ptarget = max(d.textlength(prow1, font=ftitle), d.textlength(prow2, font=ftitle))
+    draw_row(d, prow1, ftitle, W / 2, ytop, ptarget, WHITE)
+    draw_row(d, prow2, ftitle, W / 2, ytop + plh, ptarget, GOLD)
     img.resize((512, 512), Image.LANCZOS).save(os.path.join(HERE, "..", "About", "Preview.png"))
     print("wrote About/Preview.png")
 

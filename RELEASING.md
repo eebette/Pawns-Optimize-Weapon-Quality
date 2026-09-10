@@ -1,27 +1,26 @@
 # Releasing
 
-Manual local builds (workshop-local CE reference; CE is CC BY-NC-SA — no CI,
-never vendored); `Assemblies/LoadoutQuality.dll` committed.
+Manual local builds; the assembly is committed (`Assemblies/PawnsOptimizeWeaponQuality.dll`).
+The build references only public NuGet packages (Krafs.Rimworld.Ref, Lib.Harmony) - no local
+Steam or workshop DLLs - so it is CI-friendly. Combat Extended and Simple Sidearms are reached
+by reflection at runtime; neither is referenced or vendored.
 
 ## Checklist
 
-1. `dotnet build Source/LoadoutQuality/LoadoutQuality.csproj -c Release`
-2. Automated pass: `./test/run-lq-stage.sh`, then both scenarios per
-   TESTPLAN.md — all `test-results-qual*.json` must be `"passed": true`.
-3. Manual UI check: loadout dialog shows the quality + hit-point strip; ranges
-   persist across save/load; resetting to wide open prunes the entry.
-4. Composition sanity: one load in the CE+SS suite profile (SS notify path).
-5. Demo GIF (owner): QUAL-2 scene — pawn walks to the excellent rifle, swaps,
-   drops the old one. Clip to `Media/`, embed README + description slot.
-6. Blessing issues (posterity, non-blocking): bananasss00/RW-CombatExtended_ExtendedLoadout
-   and linyaDev/CEQuickLoadout — behavioral reference credit.
-7. CE upstream pitch for the FILTER half (parity argument: outfit policies have
-   these ranges, loadouts don't) — file with the working patch as evidence.
-8. Record CE version tested; tag v1.0.0; upload via in-game Mods → Upload.
+1. `dotnet build Source/PawnsOptimizeWeaponQuality/PawnsOptimizeWeaponQuality.csproj -c Release`
+2. Automated pass, both profiles (see [TESTPLAN.md](TESTPLAN.md)) - every `test-results-*.json`
+   must be `"passed": true`:
+   - CE profile: `./test/run-lq-stage.sh`, then `./test/run-lq-assert.sh lqN <save>` for `lq1`..`lq5`
+   - Vanilla profile: `./test/run-lqv-test.sh`
+3. Manual UI check: the settings page shows the auto-upgrade toggle, the minimum-quality slider,
+   and the hit-point tiebreak slider; settings persist across save/load.
+4. Composition sanity: one load in a Combat Extended + Simple Sidearms profile (exercises the CE
+   loadout path and the SS notify path); one load in vanilla (no CE) for the held-weapon path.
+5. Demo GIF (owner): a pawn walks to the higher-quality copy, swaps, and drops the old one. Clip
+   to `Media/` and embed in the README.
+6. Tag `v1.0.0`; upload from the in-game Mods menu.
 
 ## Versioning & save compatibility
 
-Semver. Save footprint: one GameComponent storing per-loadout ranges (pruned
-to nothing at defaults). Safe to ADD mid-save. REMOVING mid-save leaves a
-one-time unknown-GameComponent load warning, then nothing. Breaking either =
-major bump.
+Semver. No per-save footprint - the mod scribes nothing (settings live in mod settings; the
+per-pawn back-off cache is process-static). Safe to ADD or REMOVE mid-save.
