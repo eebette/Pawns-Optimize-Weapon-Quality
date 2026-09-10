@@ -19,22 +19,24 @@ them when one is available.
 
 ### Combat Extended + Simple Sidearms Compatibility Suite
 
-![CE + Simple Sidearms Compatibility Patch](Media/Badge_Suite.png)
+![CE + Simple Sidearms Compatibility Suite](Media/Badge_Suite.png)
 
 Mods that make Combat Extended and Simple Sidearms run smoothly together.
 
-| Module                                                                                                                                             | What it does                                                         |
-|----------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------|
-| <a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch"><img src="Media/Badge_Patch.png" width="300" alt="CE + Simple Sidearms Compatibility Patch"></a> | Core compatibility patch for Combat Extended and Simple Sidearms.    |
-| <a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Loadouts"><img src="Media/Badge_Loadouts.png" width="300" alt="Compatibility Module - Loadouts"></a>    | Synchronizes CE Loadouts with SS memory/gizmo.                       |
-| <a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Tactics"><img src="Media/Badge_Tactics.png" width="300" alt="Compatibility Module - Tactics"></a>       | Sensible tweaks to nonsense pawn behavior when CE + SS run together. |
+<table>
+<tr><th>Module</th><th>What it does</th></tr>
+<tr><td width="300"><a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Patch"><img src="Media/Badge_Patch.png" width="300" alt="CE + Simple Sidearms Compatibility Patch"></a></td><td>Core compatibility patch for Combat Extended and Simple Sidearms.</td></tr>
+<tr><td width="300"><a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Loadouts"><img src="Media/Badge_Loadouts.png" width="300" alt="Compatibility Module - Loadouts"></a></td><td>Synchronizes CE Loadouts with SS memory/gizmo.</td></tr>
+<tr><td width="300"><a href="https://github.com/eebette/CombatExtended-SimpleSidearms-Compatibility-Tactics"><img src="Media/Badge_Tactics.png" width="300" alt="Compatibility Module - Tactics"></a></td><td>Sensible tweaks to nonsense pawn behavior when CE + SS run together.</td></tr>
+</table>
 
 ### Standalone
 
-| Mod                                                                                                                                     | What it does                                                                                                                    |
-|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| <a href="https://github.com/eebette/Better-Attack-Orders-for-Simple-Sidearms"><img src="Media/Badge_BAO.png" width="300" alt="Better Attack Orders for Simple Sidearms"></a> | Adds sidearm attack orders to the right-click target menu.                                                                      |
-| <a href="https://github.com/eebette/Universal-Patch-for-More-Materials"><img src="Media/Badge_UPMM.png" width="300" alt="Universal Patch for More Materials"></a>            | Adds materials from [More Materials](https://steamcommunity.com/sharedfiles/filedetails/?id=3055040889) to non-vanilla recipes. |
+<table>
+<tr><th>Mod</th><th>What it does</th></tr>
+<tr><td width="300"><a href="https://github.com/eebette/Better-Attack-Orders-for-Simple-Sidearms"><img src="Media/Badge_BAO.png" width="300" alt="Better Attack Orders for Simple Sidearms"></a></td><td>Adds sidearm attack orders to the right-click target menu.</td></tr>
+<tr><td width="300"><a href="https://github.com/eebette/Universal-Patch-for-More-Materials"><img src="Media/Badge_UPMM.png" width="300" alt="Universal Patch for More Materials"></a></td><td>Adds materials from <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3055040889">More Materials</a> to non-vanilla recipes.</td></tr>
+</table>
 
 ## FAQ
 
