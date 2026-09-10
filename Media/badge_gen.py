@@ -159,9 +159,9 @@ def render_preview(rifle):
     ftitle = fitp([prow1, prow2], 42 * P, 470 * P)
     plh = sum(ftitle.getmetrics())
     ytop = 367 * P
-    for text, y, color in [(prow1, ytop, WHITE), (prow2, ytop + plh, GOLD)]:
-        w = d.textlength(text, font=ftitle)
-        d.text(((W - w) / 2, y), text, font=ftitle, fill=color)
+    ptarget = max(d.textlength(prow1, font=ftitle), d.textlength(prow2, font=ftitle))
+    draw_row(d, prow1, ftitle, W / 2, ytop, ptarget, WHITE)
+    draw_row(d, prow2, ftitle, W / 2, ytop + plh, ptarget, GOLD)
     img.resize((512, 512), Image.LANCZOS).save(os.path.join(HERE, "..", "About", "Preview.png"))
     print("wrote About/Preview.png")
 
