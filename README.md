@@ -36,6 +36,7 @@ Mods that make Combat Extended and Simple Sidearms run smoothly together.
 <tr><th>Mod</th><th width="540">What it does</th></tr>
 <tr><td width="300"><a href="https://github.com/eebette/Better-Attack-Orders-for-Simple-Sidearms"><img src="Media/Badge_BAO.png" width="300" alt="Better Attack Orders for Simple Sidearms"></a></td><td width="540">Adds sidearm attack orders to the right-click target menu.</td></tr>
 <tr><td width="300"><a href="https://github.com/eebette/More-Mod-Patches-for-Expanded-Materials-Metals"><img src="Media/Badge_MMP.png" width="300" alt="Expanded Materials - Metals: Mod Patches"></a></td><td width="540">Extends <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3333419387">Expanded Materials - Metals</a> to support additional mods.</td></tr>
+<tr><td width="300"><a href="https://github.com/eebette/More-Mod-Patches-for-Expanded-Materials-Masonry"><img src="Media/Badge_MMMas.png" width="300" alt="Expanded Materials - Masonry: Mod Patches"></a></td><td width="540">Extends <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3662913084">Expanded Materials - Masonry</a> to support additional mods.</td></tr>
 </table>
 
 ## FAQ
